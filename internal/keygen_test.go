@@ -378,3 +378,233 @@ func TestKeyGeneratorConsistency(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateKeyEdgeCases(t *testing.T) {
+	kg := NewKeyGenerator()
+
+	// Additional edge cases for comprehensive validation
+	edgeCases := []struct {
+		key           string
+		shouldBeValid bool
+		description   string
+	}{
+		{
+			key:           "/diagrams/puml/file%20with%20encoded%20spaces",
+			shouldBeValid: true,
+			description:   "URL encoded spaces should be valid",
+		},
+		{
+			key:           "/machines/2.5/diagram%2Fwith%2Fslashes",
+			shouldBeValid: true,
+			description:   "URL encoded slashes should be valid",
+		},
+		{
+			key:           "/machines/v1.0/diagram/entities/entity%3Awith%3Acolons",
+			shouldBeValid: true,
+			description:   "URL encoded colons should be valid",
+		},
+		{
+			key:           "/diagrams/puml/diagram.with.dots",
+			shouldBeValid: true,
+			description:   "Dots should be valid in keys",
+		},
+		{
+			key:           "/machines/2.5/diagram_with_underscores",
+			shouldBeValid: true,
+			description:   "Underscores should be valid in keys",
+		},
+		{
+			key:           "/diagrams/puml/diagram-with-dashes",
+			shouldBeValid: true,
+			description:   "Dashes should be valid in keys",
+		},
+		{
+			key:           "/diagrams/puml/UPPERCASE",
+			shouldBeValid: true,
+			description:   "Uppercase letters should be valid",
+		},
+		{
+			key:           "/diagrams/puml/123numeric",
+			shouldBeValid: true,
+			description:   "Numeric characters should be valid",
+		},
+		{
+			key:           "/diagrams/puml/mixed123_CASE-with.dots",
+			shouldBeValid: true,
+			description:   "Mixed alphanumeric with allowed special chars should be valid",
+		},
+		{
+			key:           "/diagrams/puml/name\twith\ttabs",
+			shouldBeValid: false,
+			description:   "Tab characters should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name\nwith\nnewlines",
+			shouldBeValid: false,
+			description:   "Newline characters should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name with unencoded spaces",
+			shouldBeValid: false,
+			description:   "Unencoded spaces should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name|with|pipes",
+			shouldBeValid: false,
+			description:   "Pipe characters should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name<with>brackets",
+			shouldBeValid: false,
+			description:   "Angle brackets should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name\"with\"quotes",
+			shouldBeValid: false,
+			description:   "Quote characters should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name*with*asterisks",
+			shouldBeValid: false,
+			description:   "Asterisk characters should be invalid",
+		},
+		{
+			key:           "/diagrams/puml/name?with?questions",
+			shouldBeValid: false,
+			description:   "Question mark characters should be invalid",
+		},
+	}
+
+	for _, tc := range edgeCases {
+		t.Run(tc.description, func(t *testing.T) {
+			err := kg.ValidateKey(tc.key)
+			if tc.shouldBeValid && err != nil {
+				t.Errorf("Expected key %q to be valid, but got error: %v", tc.key, err)
+			} else if !tc.shouldBeValid && err == nil {
+				t.Errorf("Expected key %q to be invalid, but validation passed", tc.key)
+			}
+		})
+	}
+}
+
+func TestSanitizeNameEdgeCases(t *testing.T) {
+	kg := &DefaultKeyGenerator{}
+
+	// Additional edge cases for sanitization
+	edgeCases := []struct {
+		name        string
+		input       string
+		expected    string
+		description string
+	}{
+		{
+			name:        "windows path separators",
+			input:       "C:\\Users\\Admin\\diagram",
+			expected:    "C%3A-Users-Admin-diagram",
+			description: "Windows path separators should be handled",
+		},
+		{
+			name:        "mixed path separators",
+			input:       "path/to\\diagram",
+			expected:    "path-to-diagram",
+			description: "Mixed path separators should be normalized",
+		},
+		{
+			name:        "multiple consecutive spaces",
+			input:       "diagram   with   spaces",
+			expected:    "diagram___with___spaces",
+			description: "Multiple spaces should be preserved as underscores",
+		},
+		{
+			name:        "tab characters",
+			input:       "diagram\twith\ttabs",
+			expected:    "diagram%09with%09tabs",
+			description: "Tab characters should be URL encoded",
+		},
+		{
+			name:        "newline characters",
+			input:       "diagram\nwith\nnewlines",
+			expected:    "diagram%0Awith%0Anewlines",
+			description: "Newline characters should be URL encoded",
+		},
+		{
+			name:        "unicode characters",
+			input:       "диаграмма测试",
+			expected:    "%D0%B4%D0%B8%D0%B0%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B0%E6%B5%8B%E8%AF%95",
+			description: "Unicode characters should be URL encoded",
+		},
+		{
+			name:        "special redis characters",
+			input:       "key*with?special[chars]",
+			expected:    "key%2Awith%3Fspecial%5Bchars%5D",
+			description: "Redis special characters should be URL encoded",
+		},
+		{
+			name:        "url unsafe characters",
+			input:       "unsafe chars: <>\"{}|\\^`",
+			expected:    "unsafe_chars%3A_%3C%3E%22%7B%7D%7C-%5E%60",
+			description: "URL unsafe characters should be properly encoded",
+		},
+		{
+			name:        "already encoded characters",
+			input:       "already%20encoded%2Fstring",
+			expected:    "already%2520encoded%252Fstring",
+			description: "Already encoded strings should be double-encoded to prevent conflicts",
+		},
+		{
+			name:        "very long name",
+			input:       strings.Repeat("a", 100),
+			expected:    strings.Repeat("a", 100),
+			description: "Long names should be preserved if they contain only safe characters",
+		},
+	}
+
+	for _, tc := range edgeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := kg.sanitizeName(tc.input)
+			if result != tc.expected {
+				t.Errorf("%s: sanitizeName(%q) = %q, want %q", tc.description, tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestKeyValidationSecurity(t *testing.T) {
+	kg := NewKeyGenerator()
+
+	// Security-focused test cases
+	securityTests := []struct {
+		key         string
+		description string
+	}{
+		{
+			key:         "/diagrams/puml/../../../etc/passwd",
+			description: "Path traversal attempts should be invalid",
+		},
+		{
+			key:         "/diagrams/puml/..\\..\\windows\\system32",
+			description: "Windows path traversal should be invalid",
+		},
+		{
+			key:         "/diagrams/puml/name\x00with\x00nulls",
+			description: "Null bytes should be invalid",
+		},
+		{
+			key:         "/diagrams/puml/name\x01\x02\x03control",
+			description: "Control characters should be invalid",
+		},
+		{
+			key:         "/diagrams/puml/name\x7fwith\x7fdelete",
+			description: "Delete character should be invalid",
+		},
+	}
+
+	for _, tc := range securityTests {
+		t.Run(tc.description, func(t *testing.T) {
+			err := kg.ValidateKey(tc.key)
+			if err == nil {
+				t.Errorf("Security test failed: key %q should be invalid but passed validation", tc.key)
+			}
+		})
+	}
+}

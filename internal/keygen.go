@@ -57,6 +57,18 @@ func (kg *DefaultKeyGenerator) ValidateKey(key string) error {
 		return fmt.Errorf("key must start with '/'")
 	}
 
+	// Check for control characters and null bytes (security)
+	for i, r := range key {
+		if r < 32 || r == 127 { // Control characters and DEL
+			return fmt.Errorf("key contains control character at position %d: %s", i, key)
+		}
+	}
+
+	// Check for path traversal attempts
+	if strings.Contains(key, "..") {
+		return fmt.Errorf("key contains path traversal sequence: %s", key)
+	}
+
 	// Check for invalid characters that could cause issues in Redis
 	// Allow alphanumeric, dash, underscore, forward slash, dot, and percent-encoded characters
 	invalidChars := regexp.MustCompile(`[^\w\-_/.%]`)
