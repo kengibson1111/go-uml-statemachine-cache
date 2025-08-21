@@ -61,9 +61,6 @@ func TestCacheInterface(t *testing.T) {
 
 	// Test that we can create a mock cache instance
 	cache := &MockCache{}
-	if cache == nil {
-		t.Error("Failed to create MockCache instance")
-	}
 
 	// Test basic interface compliance by calling methods
 	ctx := context.Background()
