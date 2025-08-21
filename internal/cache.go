@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal/models"
+	"github.com/kengibson1111/go-uml-statemachine-cache/models"
 )
 
 // Cache defines the interface for caching PlantUML diagrams and parsed state machines

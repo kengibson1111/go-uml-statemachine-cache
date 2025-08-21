@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal/models"
+	"github.com/kengibson1111/go-uml-statemachine-cache/models"
 )
 
 // MockCache is a simple mock implementation of the Cache interface for testing
