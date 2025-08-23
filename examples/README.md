@@ -24,6 +24,24 @@ Shows state machine caching with versioning:
 
 **Run:** `go run examples/state_machine_cache_example/main.go`
 
+### health_monitoring_example
+Demonstrates comprehensive health monitoring:
+- System health checks and status monitoring
+- Performance metrics collection
+- Network connectivity validation
+- Data integrity checks
+- Automated troubleshooting recommendations
+
+**Run:** `go run examples/health_monitoring_example/main.go`
+
+### health_monitoring_diagnostics
+Command-line diagnostic tool for troubleshooting cache issues:
+- Verbose diagnostic output
+- System health analysis
+- Performance troubleshooting
+
+**Run:** `go run examples/health_monitoring_diagnostics/main.go -verbose`
+
 ## Prerequisites
 
 Both examples require a running Redis server on `localhost:6379`. You can start Redis using:

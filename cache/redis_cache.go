@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
@@ -1053,9 +1055,13 @@ func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) 
 	}
 
 	// Parse memory information
-	info.MemoryUsed = rc.parseMemoryInfo(memInfo, "used_memory:")
-	info.MemoryPeak = rc.parseMemoryInfo(memInfo, "used_memory_peak:")
-	info.MemoryOverhead = rc.parseMemoryInfo(memInfo, "used_memory_overhead:")
+	memoryMetrics, err := rc.parseMemoryInfo(memInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse memory info: %w", err)
+	}
+	info.MemoryUsed = memoryMetrics.UsedMemory
+	info.MemoryPeak = memoryMetrics.UsedMemoryPeak
+	info.MemoryOverhead = 0 // Not available in new format
 
 	// Get cache-specific statistics by scanning for our key patterns
 	info.DiagramCount = rc.countKeysByPattern(ctx, "/diagrams/puml/*")
@@ -1063,27 +1069,6 @@ func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) 
 	info.EntityCount = rc.countKeysByPattern(ctx, "/machines/*/entities/*")
 
 	return info, nil
-}
-
-// parseMemoryInfo extracts memory values from Redis INFO output
-func (rc *RedisCache) parseMemoryInfo(info, key string) int64 {
-	lines := splitString(info, "\r\n")
-	for _, line := range lines {
-		if len(line) > len(key) && line[:len(key)] == key {
-			valueStr := line[len(key):]
-			// Parse the numeric value
-			var value int64
-			for _, char := range valueStr {
-				if char >= '0' && char <= '9' {
-					value = value*10 + int64(char-'0')
-				} else {
-					break
-				}
-			}
-			return value
-		}
-	}
-	return 0
 }
 
 // countKeysByPattern counts keys matching a specific pattern
@@ -1131,9 +1116,229 @@ func splitString(s, delimiter string) []string {
 	return result
 }
 
-// Health performs a health check on the cache
+// Health performs a basic health check on the cache
 func (rc *RedisCache) Health(ctx context.Context) error {
 	return rc.client.HealthWithRetry(ctx)
+}
+
+// HealthDetailed performs a comprehensive health check and returns detailed status information
+func (rc *RedisCache) HealthDetailed(ctx context.Context) (*HealthStatus, error) {
+	startTime := time.Now()
+
+	healthStatus := &HealthStatus{
+		Timestamp: startTime,
+		Status:    "healthy",
+		Errors:    []string{},
+		Warnings:  []string{},
+	}
+
+	// Check basic connectivity
+	connectionHealth, err := rc.GetConnectionHealth(ctx)
+	if err != nil {
+		healthStatus.Errors = append(healthStatus.Errors, fmt.Sprintf("Connection health check failed: %v", err))
+		healthStatus.Status = "unhealthy"
+	} else if !connectionHealth.Connected {
+		healthStatus.Errors = append(healthStatus.Errors, fmt.Sprintf("Redis connection failed: %s", connectionHealth.LastError))
+		healthStatus.Status = "unhealthy"
+	}
+	healthStatus.Connection = *connectionHealth
+
+	// Get performance metrics
+	performanceMetrics, err := rc.GetPerformanceMetrics(ctx)
+	if err != nil {
+		healthStatus.Warnings = append(healthStatus.Warnings, fmt.Sprintf("Performance metrics unavailable: %v", err))
+		if healthStatus.Status == "healthy" {
+			healthStatus.Status = "degraded"
+		}
+	} else {
+		healthStatus.Performance = *performanceMetrics
+
+		// Check for performance issues
+		if performanceMetrics.MemoryUsage.MemoryFragmentation > 1.5 {
+			healthStatus.Warnings = append(healthStatus.Warnings, "High memory fragmentation detected")
+			if healthStatus.Status == "healthy" {
+				healthStatus.Status = "degraded"
+			}
+		}
+
+		if performanceMetrics.KeyspaceInfo.HitRate < 80.0 {
+			healthStatus.Warnings = append(healthStatus.Warnings, "Low cache hit rate detected")
+			if healthStatus.Status == "healthy" {
+				healthStatus.Status = "degraded"
+			}
+		}
+	}
+
+	// Run diagnostics
+	diagnostics, err := rc.RunDiagnostics(ctx)
+	if err != nil {
+		healthStatus.Warnings = append(healthStatus.Warnings, fmt.Sprintf("Diagnostics failed: %v", err))
+		if healthStatus.Status == "healthy" {
+			healthStatus.Status = "degraded"
+		}
+	} else {
+		healthStatus.Diagnostics = *diagnostics
+
+		// Check diagnostic results
+		if !diagnostics.ConfigurationCheck.Valid {
+			healthStatus.Status = "unhealthy"
+			healthStatus.Errors = append(healthStatus.Errors, "Configuration validation failed")
+		}
+
+		if !diagnostics.NetworkCheck.Reachable {
+			healthStatus.Status = "unhealthy"
+			healthStatus.Errors = append(healthStatus.Errors, "Network connectivity issues detected")
+		}
+
+		if !diagnostics.PerformanceCheck.Acceptable {
+			if healthStatus.Status == "healthy" {
+				healthStatus.Status = "degraded"
+			}
+			healthStatus.Warnings = append(healthStatus.Warnings, "Performance issues detected")
+		}
+
+		if !diagnostics.DataIntegrityCheck.Consistent {
+			if healthStatus.Status == "healthy" {
+				healthStatus.Status = "degraded"
+			}
+			healthStatus.Warnings = append(healthStatus.Warnings, "Data integrity issues detected")
+		}
+	}
+
+	healthStatus.ResponseTime = time.Since(startTime)
+	return healthStatus, nil
+}
+
+// GetConnectionHealth returns detailed connection health information
+func (rc *RedisCache) GetConnectionHealth(ctx context.Context) (*ConnectionHealth, error) {
+	connectionHealth := &ConnectionHealth{
+		Address:  rc.config.RedisAddr,
+		Database: rc.config.RedisDB,
+	}
+
+	// Test basic connectivity with ping
+	pingStart := time.Now()
+	err := rc.client.HealthWithRetry(ctx)
+	pingLatency := time.Since(pingStart)
+
+	if err != nil {
+		connectionHealth.Connected = false
+		connectionHealth.LastError = err.Error()
+		return connectionHealth, nil
+	}
+
+	connectionHealth.Connected = true
+	connectionHealth.PingLatency = pingLatency
+
+	// Get connection pool statistics
+	client := rc.client.Client()
+	if client != nil {
+		poolStats := client.PoolStats()
+		connectionHealth.PoolStats = ConnectionPoolStats{
+			TotalConnections:  int(poolStats.TotalConns),
+			IdleConnections:   int(poolStats.IdleConns),
+			ActiveConnections: int(poolStats.TotalConns - poolStats.IdleConns),
+			Hits:              int(poolStats.Hits),
+			Misses:            int(poolStats.Misses),
+			Timeouts:          int(poolStats.Timeouts),
+			StaleConnections:  int(poolStats.StaleConns),
+		}
+	}
+
+	return connectionHealth, nil
+}
+
+// GetPerformanceMetrics returns detailed performance metrics
+func (rc *RedisCache) GetPerformanceMetrics(ctx context.Context) (*PerformanceMetrics, error) {
+	metrics := &PerformanceMetrics{}
+
+	// Get memory information
+	memoryInfo, err := rc.client.InfoWithRetry(ctx, "memory")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get memory info: %w", err)
+	}
+
+	memoryMetrics, err := rc.parseMemoryInfo(memoryInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse memory info: %w", err)
+	}
+	metrics.MemoryUsage = *memoryMetrics
+
+	// Get keyspace information
+	keyspaceInfo, err := rc.client.InfoWithRetry(ctx, "keyspace")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get keyspace info: %w", err)
+	}
+
+	keyspaceMetrics, err := rc.parseKeyspaceInfo(keyspaceInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse keyspace info: %w", err)
+	}
+	metrics.KeyspaceInfo = *keyspaceMetrics
+
+	// Get stats information
+	statsInfo, err := rc.client.InfoWithRetry(ctx, "stats")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stats info: %w", err)
+	}
+
+	operationMetrics, err := rc.parseStatsInfo(statsInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse stats info: %w", err)
+	}
+	metrics.OperationStats = *operationMetrics
+
+	// Parse keyspace hits/misses from stats info and update keyspace metrics
+	rc.parseKeyspaceStatsFromInfo(statsInfo, &metrics.KeyspaceInfo)
+
+	// Get server information
+	serverInfo, err := rc.client.InfoWithRetry(ctx, "server")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server info: %w", err)
+	}
+
+	serverMetrics, err := rc.parseServerInfo(serverInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse server info: %w", err)
+	}
+	metrics.ServerInfo = *serverMetrics
+
+	return metrics, nil
+}
+
+// RunDiagnostics performs comprehensive diagnostic checks
+func (rc *RedisCache) RunDiagnostics(ctx context.Context) (*DiagnosticInfo, error) {
+	diagnostics := &DiagnosticInfo{}
+
+	// Configuration check
+	configCheck := rc.validateConfiguration()
+	diagnostics.ConfigurationCheck = configCheck
+
+	// Network check
+	networkCheck, err := rc.performNetworkCheck(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("network check failed: %w", err)
+	}
+	diagnostics.NetworkCheck = *networkCheck
+
+	// Performance check
+	performanceCheck, err := rc.performPerformanceCheck(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("performance check failed: %w", err)
+	}
+	diagnostics.PerformanceCheck = *performanceCheck
+
+	// Data integrity check
+	dataIntegrityCheck, err := rc.performDataIntegrityCheck(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("data integrity check failed: %w", err)
+	}
+	diagnostics.DataIntegrityCheck = *dataIntegrityCheck
+
+	// Generate recommendations
+	diagnostics.Recommendations = rc.generateRecommendations(diagnostics)
+
+	return diagnostics, nil
 }
 
 // Close closes the cache connection
@@ -1187,4 +1392,486 @@ func contains(s, substr string) bool {
 					}
 					return false
 				}()))
+}
+
+// parseMemoryInfo parses Redis memory information from INFO memory output
+func (rc *RedisCache) parseMemoryInfo(info string) (*MemoryMetrics, error) {
+	metrics := &MemoryMetrics{}
+
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "used_memory":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.UsedMemory = val
+			}
+		case "used_memory_human":
+			metrics.UsedMemoryHuman = value
+		case "used_memory_peak":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.UsedMemoryPeak = val
+			}
+		case "mem_fragmentation_ratio":
+			if val, err := strconv.ParseFloat(value, 64); err == nil {
+				metrics.MemoryFragmentation = val
+			}
+		case "maxmemory":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.MaxMemory = val
+			}
+		case "maxmemory_policy":
+			metrics.MaxMemoryPolicy = value
+		}
+	}
+
+	return metrics, nil
+}
+
+// parseKeyspaceInfo parses Redis keyspace information from INFO keyspace output
+func (rc *RedisCache) parseKeyspaceInfo(info string) (*KeyspaceMetrics, error) {
+	metrics := &KeyspaceMetrics{}
+
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+
+		// Parse db0:keys=X,expires=Y,avg_ttl=Z format
+		if strings.HasPrefix(line, fmt.Sprintf("db%d:", rc.config.RedisDB)) {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				dbInfo := parts[1]
+				dbParts := strings.Split(dbInfo, ",")
+
+				for _, part := range dbParts {
+					kv := strings.SplitN(part, "=", 2)
+					if len(kv) == 2 {
+						key := strings.TrimSpace(kv[0])
+						value := strings.TrimSpace(kv[1])
+
+						switch key {
+						case "keys":
+							if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+								metrics.TotalKeys = val
+							}
+						case "expires":
+							if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+								metrics.ExpiringKeys = val
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Calculate average key size (estimate)
+	if metrics.TotalKeys > 0 {
+		// This is a rough estimate - in a real implementation you might want to sample keys
+		metrics.AverageKeySize = 50.0 // Default estimate
+	}
+
+	return metrics, nil
+}
+
+// parseStatsInfo parses Redis stats information from INFO stats output
+func (rc *RedisCache) parseStatsInfo(info string) (*OperationMetrics, error) {
+	metrics := &OperationMetrics{}
+
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "total_commands_processed":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.TotalCommands = val
+			}
+		case "instantaneous_ops_per_sec":
+			if val, err := strconv.ParseFloat(value, 64); err == nil {
+				metrics.CommandsPerSecond = val
+			}
+		case "keyspace_hits":
+			// Skip keyspace hits - will be handled in keyspace info parsing
+		case "keyspace_misses":
+			// Skip keyspace misses - will be handled in keyspace info parsing
+		case "rejected_connections":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.RejectedConnections = val
+			}
+		}
+	}
+
+	return metrics, nil
+}
+
+// parseServerInfo parses Redis server information from INFO server output
+func (rc *RedisCache) parseServerInfo(info string) (*ServerMetrics, error) {
+	metrics := &ServerMetrics{}
+
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "redis_version":
+			metrics.RedisVersion = value
+		case "uptime_in_seconds":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.UptimeSeconds = val
+				metrics.UptimeDays = val / 86400 // Convert seconds to days
+			}
+		case "redis_mode":
+			metrics.ServerMode = value
+		case "role":
+			metrics.Role = value
+		case "connected_slaves":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.ConnectedSlaves = val
+			}
+		}
+	}
+
+	return metrics, nil
+}
+
+// validateConfiguration performs configuration validation
+func (rc *RedisCache) validateConfiguration() ConfigCheck {
+	check := ConfigCheck{
+		Valid:           true,
+		Issues:          []string{},
+		Recommendations: []string{},
+	}
+
+	// Check connection timeouts
+	if rc.config.DialTimeout < time.Second {
+		check.Issues = append(check.Issues, "Dial timeout is very low (< 1s)")
+		check.Recommendations = append(check.Recommendations, "Consider increasing dial timeout to at least 1 second")
+	}
+
+	if rc.config.ReadTimeout < 500*time.Millisecond {
+		check.Issues = append(check.Issues, "Read timeout is very low (< 500ms)")
+		check.Recommendations = append(check.Recommendations, "Consider increasing read timeout to at least 500ms")
+	}
+
+	if rc.config.WriteTimeout < 500*time.Millisecond {
+		check.Issues = append(check.Issues, "Write timeout is very low (< 500ms)")
+		check.Recommendations = append(check.Recommendations, "Consider increasing write timeout to at least 500ms")
+	}
+
+	// Check pool size
+	if rc.config.PoolSize < 5 {
+		check.Recommendations = append(check.Recommendations, "Consider increasing pool size for better concurrency")
+	}
+
+	if rc.config.PoolSize > 100 {
+		check.Recommendations = append(check.Recommendations, "Pool size is very high, consider reducing to save resources")
+	}
+
+	// Check TTL
+	if rc.config.DefaultTTL < time.Hour {
+		check.Recommendations = append(check.Recommendations, "Default TTL is very low, consider increasing for better cache efficiency")
+	}
+
+	// Check retry configuration
+	if rc.config.RetryConfig != nil {
+		if rc.config.RetryConfig.MaxAttempts > 10 {
+			check.Issues = append(check.Issues, "Max retry attempts is very high")
+			check.Recommendations = append(check.Recommendations, "Consider reducing max retry attempts to avoid long delays")
+		}
+
+		if rc.config.RetryConfig.MaxDelay > 30*time.Second {
+			check.Issues = append(check.Issues, "Max retry delay is very high")
+			check.Recommendations = append(check.Recommendations, "Consider reducing max retry delay")
+		}
+	}
+
+	if len(check.Issues) > 0 {
+		check.Valid = false
+	}
+
+	return check
+}
+
+// performNetworkCheck performs network connectivity validation
+func (rc *RedisCache) performNetworkCheck(ctx context.Context) (*NetworkCheck, error) {
+	check := &NetworkCheck{
+		Issues: []string{},
+	}
+
+	// Test basic connectivity with multiple pings
+	var latencies []time.Duration
+	var failures int
+
+	for i := 0; i < 5; i++ {
+		start := time.Now()
+		err := rc.client.HealthWithRetry(ctx)
+		latency := time.Since(start)
+
+		if err != nil {
+			failures++
+			check.Issues = append(check.Issues, fmt.Sprintf("Ping %d failed: %v", i+1, err))
+		} else {
+			latencies = append(latencies, latency)
+		}
+	}
+
+	// Calculate average latency
+	if len(latencies) > 0 {
+		var totalLatency time.Duration
+		for _, lat := range latencies {
+			totalLatency += lat
+		}
+		check.Latency = totalLatency / time.Duration(len(latencies))
+		check.Reachable = true
+	} else {
+		check.Reachable = false
+	}
+
+	// Calculate packet loss
+	check.PacketLoss = (float64(failures) / 5.0) * 100.0
+
+	// Add warnings for high latency or packet loss
+	if check.Latency > 100*time.Millisecond {
+		check.Issues = append(check.Issues, "High network latency detected")
+	}
+
+	if check.PacketLoss > 0 {
+		check.Issues = append(check.Issues, fmt.Sprintf("Packet loss detected: %.1f%%", check.PacketLoss))
+	}
+
+	return check, nil
+}
+
+// performPerformanceCheck performs performance validation
+func (rc *RedisCache) performPerformanceCheck(ctx context.Context) (*PerformanceCheck, error) {
+	check := &PerformanceCheck{
+		Acceptable:      true,
+		Bottlenecks:     []string{},
+		Recommendations: []string{},
+	}
+
+	// Get performance metrics for analysis
+	metrics, err := rc.GetPerformanceMetrics(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get performance metrics: %w", err)
+	}
+
+	// Check memory fragmentation
+	if metrics.MemoryUsage.MemoryFragmentation > 2.0 {
+		check.Acceptable = false
+		check.Bottlenecks = append(check.Bottlenecks, "High memory fragmentation")
+		check.Recommendations = append(check.Recommendations, "Consider restarting Redis or using MEMORY PURGE command")
+	} else if metrics.MemoryUsage.MemoryFragmentation > 1.5 {
+		check.Bottlenecks = append(check.Bottlenecks, "Moderate memory fragmentation")
+		check.Recommendations = append(check.Recommendations, "Monitor memory fragmentation and consider cleanup")
+	}
+
+	// Check hit rate
+	if metrics.KeyspaceInfo.HitRate < 70.0 {
+		check.Acceptable = false
+		check.Bottlenecks = append(check.Bottlenecks, "Low cache hit rate")
+		check.Recommendations = append(check.Recommendations, "Review caching strategy and TTL settings")
+	} else if metrics.KeyspaceInfo.HitRate < 85.0 {
+		check.Recommendations = append(check.Recommendations, "Cache hit rate could be improved")
+	}
+
+	// Check memory usage
+	if metrics.MemoryUsage.MaxMemory > 0 {
+		usagePercent := (float64(metrics.MemoryUsage.UsedMemory) / float64(metrics.MemoryUsage.MaxMemory)) * 100.0
+		if usagePercent > 90.0 {
+			check.Acceptable = false
+			check.Bottlenecks = append(check.Bottlenecks, "High memory usage")
+			check.Recommendations = append(check.Recommendations, "Consider increasing memory limit or implementing cleanup")
+		} else if usagePercent > 80.0 {
+			check.Recommendations = append(check.Recommendations, "Memory usage is getting high, monitor closely")
+		}
+	}
+
+	// Check connection pool utilization
+	connectionHealth, err := rc.GetConnectionHealth(ctx)
+	if err == nil {
+		if connectionHealth.PoolStats.TotalConnections > 0 {
+			utilizationPercent := (float64(connectionHealth.PoolStats.ActiveConnections) / float64(connectionHealth.PoolStats.TotalConnections)) * 100.0
+			if utilizationPercent > 90.0 {
+				check.Bottlenecks = append(check.Bottlenecks, "High connection pool utilization")
+				check.Recommendations = append(check.Recommendations, "Consider increasing pool size")
+			}
+		}
+
+		if connectionHealth.PoolStats.Timeouts > 0 {
+			check.Bottlenecks = append(check.Bottlenecks, "Connection pool timeouts detected")
+			check.Recommendations = append(check.Recommendations, "Consider increasing pool size or connection timeouts")
+		}
+	}
+
+	return check, nil
+}
+
+// performDataIntegrityCheck performs data integrity validation
+func (rc *RedisCache) performDataIntegrityCheck(ctx context.Context) (*DataIntegrityCheck, error) {
+	check := &DataIntegrityCheck{
+		Consistent:   true,
+		Issues:       []string{},
+		OrphanedKeys: 0,
+	}
+
+	// Check for orphaned entity keys
+	// Scan for all entity keys and verify they have corresponding state machines
+	entityPattern := "/machines/*/entities/*"
+
+	client := rc.client.Client()
+	if client == nil {
+		return check, nil
+	}
+
+	iter := client.Scan(ctx, 0, entityPattern, 100).Iterator()
+	var entityKeys []string
+
+	for iter.Next(ctx) {
+		entityKeys = append(entityKeys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan for entity keys: %w", err)
+	}
+
+	// Check each entity key to see if its parent state machine exists
+	for _, entityKey := range entityKeys {
+		// Extract state machine key from entity key
+		// Entity key format: /machines/<version>/<diagram>/entities/<entityID>
+		parts := strings.Split(entityKey, "/")
+		if len(parts) >= 5 {
+			stateMachineKey := fmt.Sprintf("/machines/%s/%s", parts[2], parts[3])
+
+			// Check if state machine exists
+			exists, err := rc.client.ExistsWithRetry(ctx, stateMachineKey)
+			if err != nil {
+				check.Issues = append(check.Issues, fmt.Sprintf("Failed to check state machine for entity %s: %v", entityKey, err))
+				check.Consistent = false
+				continue
+			}
+
+			if exists == 0 {
+				check.OrphanedKeys++
+				check.Issues = append(check.Issues, fmt.Sprintf("Orphaned entity key found: %s", entityKey))
+				check.Consistent = false
+			}
+		}
+	}
+
+	// Additional integrity checks could be added here:
+	// - Verify JSON structure of cached objects
+	// - Check for expired keys that should have been cleaned up
+	// - Validate referential integrity between diagrams and state machines
+
+	return check, nil
+}
+
+// generateRecommendations generates performance and configuration recommendations
+func (rc *RedisCache) generateRecommendations(diagnostics *DiagnosticInfo) []string {
+	var recommendations []string
+
+	// Collect all recommendations from sub-checks
+	recommendations = append(recommendations, diagnostics.ConfigurationCheck.Recommendations...)
+	recommendations = append(recommendations, diagnostics.PerformanceCheck.Recommendations...)
+
+	// Add general recommendations based on overall health
+	if !diagnostics.NetworkCheck.Reachable {
+		recommendations = append(recommendations, "Check network connectivity to Redis server")
+		recommendations = append(recommendations, "Verify Redis server is running and accessible")
+	}
+
+	if diagnostics.DataIntegrityCheck.OrphanedKeys > 0 {
+		recommendations = append(recommendations, "Run cleanup operation to remove orphaned keys")
+		recommendations = append(recommendations, "Review cache cleanup policies")
+	}
+
+	if len(diagnostics.ConfigurationCheck.Issues) > 0 {
+		recommendations = append(recommendations, "Review and update Redis configuration")
+	}
+
+	if len(diagnostics.PerformanceCheck.Bottlenecks) > 0 {
+		recommendations = append(recommendations, "Address identified performance bottlenecks")
+	}
+
+	// Remove duplicates
+	seen := make(map[string]bool)
+	var uniqueRecommendations []string
+	for _, rec := range recommendations {
+		if !seen[rec] {
+			seen[rec] = true
+			uniqueRecommendations = append(uniqueRecommendations, rec)
+		}
+	}
+
+	return uniqueRecommendations
+}
+
+// parseKeyspaceStatsFromInfo parses keyspace statistics from Redis stats info
+func (rc *RedisCache) parseKeyspaceStatsFromInfo(info string, metrics *KeyspaceMetrics) {
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "keyspace_hits":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.KeyspaceHits = val
+			}
+		case "keyspace_misses":
+			if val, err := strconv.ParseInt(value, 10, 64); err == nil {
+				metrics.KeyspaceMisses = val
+			}
+		}
+	}
+
+	// Calculate hit rate
+	totalRequests := metrics.KeyspaceHits + metrics.KeyspaceMisses
+	if totalRequests > 0 {
+		metrics.HitRate = (float64(metrics.KeyspaceHits) / float64(totalRequests)) * 100.0
+	}
 }

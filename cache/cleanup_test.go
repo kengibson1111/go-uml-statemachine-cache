@@ -427,39 +427,32 @@ func TestRedisCache_parseMemoryInfo(t *testing.T) {
 	tests := []struct {
 		name     string
 		info     string
-		key      string
-		expected int64
+		expected MemoryMetrics
 	}{
 		{
-			name:     "parse used_memory",
-			info:     "used_memory:1048576\r\nused_memory_peak:2097152\r\n",
-			key:      "used_memory:",
-			expected: 1048576,
-		},
-		{
-			name:     "parse used_memory_peak",
-			info:     "used_memory:1048576\r\nused_memory_peak:2097152\r\n",
-			key:      "used_memory_peak:",
-			expected: 2097152,
-		},
-		{
-			name:     "key not found",
-			info:     "used_memory:1048576\r\nused_memory_peak:2097152\r\n",
-			key:      "nonexistent:",
-			expected: 0,
+			name: "parse memory info",
+			info: "used_memory:1048576\r\nused_memory_human:1.00M\r\nused_memory_peak:2097152\r\nmem_fragmentation_ratio:1.25\r\nmaxmemory:0\r\nmaxmemory_policy:noeviction\r\n",
+			expected: MemoryMetrics{
+				UsedMemory:          1048576,
+				UsedMemoryHuman:     "1.00M",
+				UsedMemoryPeak:      2097152,
+				MemoryFragmentation: 1.25,
+				MaxMemory:           0,
+				MaxMemoryPolicy:     "noeviction",
+			},
 		},
 		{
 			name:     "empty info",
 			info:     "",
-			key:      "used_memory:",
-			expected: 0,
+			expected: MemoryMetrics{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := cache.parseMemoryInfo(tt.info, tt.key)
-			assert.Equal(t, tt.expected, result)
+			result, err := cache.parseMemoryInfo(tt.info)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, *result)
 		})
 	}
 }

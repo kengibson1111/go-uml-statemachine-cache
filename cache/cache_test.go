@@ -79,6 +79,29 @@ func (m *MockCache) Health(ctx context.Context) error {
 	return nil
 }
 
+func (m *MockCache) HealthDetailed(ctx context.Context) (*HealthStatus, error) {
+	return &HealthStatus{
+		Status:    "healthy",
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func (m *MockCache) GetConnectionHealth(ctx context.Context) (*ConnectionHealth, error) {
+	return &ConnectionHealth{
+		Connected: true,
+		Address:   "localhost:6379",
+		Database:  0,
+	}, nil
+}
+
+func (m *MockCache) GetPerformanceMetrics(ctx context.Context) (*PerformanceMetrics, error) {
+	return &PerformanceMetrics{}, nil
+}
+
+func (m *MockCache) RunDiagnostics(ctx context.Context) (*DiagnosticInfo, error) {
+	return &DiagnosticInfo{}, nil
+}
+
 func (m *MockCache) Close() error {
 	return nil
 }

@@ -76,6 +76,7 @@ type RedisClientInterface interface {
 	SetWithRetry(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 	GetWithRetry(ctx context.Context, key string) (string, error)
 	DelWithRetry(ctx context.Context, keys ...string) error
+	ExistsWithRetry(ctx context.Context, keys ...string) (int64, error)
 
 	// Enhanced cleanup and monitoring methods
 	ScanWithRetry(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)

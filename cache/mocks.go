@@ -125,6 +125,12 @@ func (m *MockRedisClient) MemoryUsageWithRetry(ctx context.Context, key string) 
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// ExistsWithRetry mocks the ExistsWithRetry method
+func (m *MockRedisClient) ExistsWithRetry(ctx context.Context, keys ...string) (int64, error) {
+	args := m.Called(ctx, keys)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Legacy methods for backward compatibility
 // Del mocks the Del method
 func (m *MockRedisClient) Del(ctx context.Context, keys ...string) (int64, error) {
