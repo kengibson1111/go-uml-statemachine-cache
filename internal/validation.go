@@ -27,7 +27,7 @@ func NewInputValidator() *InputValidator {
 		maxStringLength:     10000, // 10KB max for string inputs
 		maxKeyLength:        250,   // Redis key length limit
 		allowedCharPattern:  regexp.MustCompile(`^[\w\-_/.%\s]+$`),
-		sqlInjectionPattern: regexp.MustCompile(`(?i)\b(union\s+select|insert\s+into|update\s+set|delete\s+from|drop\s+table|create\s+table|alter\s+table|exec\s*\(|execute\s*\(|script\s*>|javascript\s*:|vbscript\s*:)\b`),
+		sqlInjectionPattern: regexp.MustCompile(`(?i)(union\s+select|insert\s+into|update\s+.*set|delete\s+from|drop\s+table|create\s+table|alter\s+table|exec\s*\(|execute\s*\(|script\s*>|javascript\s*:|vbscript\s*:|;\s*update\s+|;\s*select\s+|or\s+1\s*=\s*1)`),
 		xssPattern:          regexp.MustCompile(`(?i)(<script|javascript:|vbscript:|onload=|onerror=|onclick=|<iframe|<object|<embed)`),
 	}
 }
@@ -97,6 +97,11 @@ func (v *InputValidator) ValidateAndSanitizeName(name, fieldName string) (string
 	// Check for null bytes (security)
 	if strings.Contains(name, "\x00") {
 		return "", NewValidationError(fmt.Sprintf("%s contains null bytes", fieldName), nil)
+	}
+
+	// Check for potential security threats
+	if err := v.checkSecurityThreats(name, fieldName); err != nil {
+		return "", err
 	}
 
 	// Sanitize the name for use in keys

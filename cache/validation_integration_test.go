@@ -337,7 +337,8 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, DefaultRedisConfig())
 
 			if !tt.expectError {
-				// Setup mocks for successful cleanup - will be handled by the cleanup implementation
+				// Setup mocks for successful cleanup
+				mockClient.On("ScanWithRetry", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]string{}, uint64(0), nil)
 			}
 
 			_, err := cache.CleanupWithOptions(ctx, tt.pattern, tt.options)
@@ -437,6 +438,13 @@ func TestRedisCache_EnhancedValidation_SecurityThreats(t *testing.T) {
 			mockKeyGen := NewMockKeyGenerator()
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, DefaultRedisConfig())
 
+			// Setup mocks for safe content tests
+			if !tt.expected {
+				mockKeyGen.On("DiagramKey", mock.Anything).Return("/diagrams/puml/test")
+				mockKeyGen.On("ValidateKey", mock.Anything).Return(nil)
+				mockClient.On("SetWithRetry", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			}
+
 			var err error
 			switch tt.field {
 			case "name":
@@ -449,7 +457,7 @@ func TestRedisCache_EnhancedValidation_SecurityThreats(t *testing.T) {
 				require.Error(t, err, "Expected security threat to be detected: %s", tt.input)
 				assert.True(t, IsValidationError(err), "Expected validation error for security threat")
 			} else {
-				// For safe content, we might get other errors (like mock setup), but not validation errors
+				// For safe content, we should not get validation errors
 				if err != nil && IsValidationError(err) {
 					t.Errorf("Safe content should not trigger validation error: %s", tt.input)
 				}
