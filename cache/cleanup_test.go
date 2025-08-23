@@ -102,7 +102,7 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 	}{
 		{
 			name:    "successful cleanup with custom options",
-			pattern: "/test/*",
+			pattern: "/diagrams/*",
 			options: &CleanupOptions{
 				BatchSize:      50,
 				ScanCount:      50,
@@ -119,21 +119,21 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			},
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation
-				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/test/*", int64(50)).Return(
-					[]string{"/test/key1", "/test/key2", "/test/key3"}, uint64(0), nil)
+				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(50)).Return(
+					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3"}, uint64(0), nil)
 
 				// Mock memory usage for metrics
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/test/key1").Return(int64(100), nil)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/test/key2").Return(int64(150), nil)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/test/key3").Return(int64(200), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key1").Return(int64(100), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key2").Return(int64(150), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key3").Return(int64(200), nil)
 
 				// Mock delete operation
-				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/test/key1", "/test/key2", "/test/key3"}).Return(int64(3), nil)
+				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3"}).Return(int64(3), nil)
 			},
 		},
 		{
 			name:    "dry run mode",
-			pattern: "/test/*",
+			pattern: "/diagrams/*",
 			options: &CleanupOptions{
 				BatchSize:      100,
 				ScanCount:      100,
@@ -150,15 +150,15 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			},
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation
-				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/test/*", int64(100)).Return(
-					[]string{"/test/key1", "/test/key2"}, uint64(0), nil)
+				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(100)).Return(
+					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2"}, uint64(0), nil)
 
 				// No delete mocks needed for dry run
 			},
 		},
 		{
 			name:    "invalid options - negative batch size",
-			pattern: "/test/*",
+			pattern: "/diagrams/*",
 			options: &CleanupOptions{
 				BatchSize: -1,
 			},
@@ -169,7 +169,7 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 		},
 		{
 			name:    "max keys limit",
-			pattern: "/test/*",
+			pattern: "/diagrams/*",
 			options: &CleanupOptions{
 				BatchSize:      100,
 				ScanCount:      100,
@@ -186,11 +186,11 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			},
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation - returns more keys than max
-				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/test/*", int64(100)).Return(
-					[]string{"/test/key1", "/test/key2", "/test/key3", "/test/key4"}, uint64(0), nil)
+				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(100)).Return(
+					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3", "/diagrams/puml/key4"}, uint64(0), nil)
 
 				// Mock delete operation - should only delete first 2 keys
-				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/test/key1", "/test/key2"}).Return(int64(2), nil)
+				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/diagrams/puml/key1", "/diagrams/puml/key2"}).Return(int64(2), nil)
 			},
 		},
 	}

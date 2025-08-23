@@ -75,9 +75,9 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test/diagram-with-special_chars.puml").Return("/diagrams/puml/test%2Fdiagram-with-special_chars.puml")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test%2Fdiagram-with-special_chars.puml").Return(nil)
-				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test%2Fdiagram-with-special_chars.puml", "@startuml\nstate \"State with spaces\"\n@enduml", time.Hour).Return(nil)
+				mockKeyGen.On("DiagramKey", "test-diagram-with-special_chars.puml").Return("/diagrams/puml/test-diagram-with-special_chars.puml")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram-with-special_chars.puml").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram-with-special_chars.puml", "@startuml\nstate \"State with spaces\"\n@enduml", time.Hour).Return(nil)
 			},
 		},
 	}
