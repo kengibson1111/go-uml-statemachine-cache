@@ -169,9 +169,10 @@ func DefaultRedisRetryConfig() *RedisRetryConfig {
 
 // RedisCache implements the Cache interface using Redis as the backend
 type RedisCache struct {
-	client internal.RedisClientInterface
-	keyGen internal.KeyGenerator
-	config *RedisConfig
+	client    internal.RedisClientInterface
+	keyGen    internal.KeyGenerator
+	config    *RedisConfig
+	validator *internal.InputValidator
 }
 
 // NewRedisCache creates a new Redis-backed cache implementation
@@ -182,33 +183,48 @@ func NewRedisCache(config *RedisConfig) (*RedisCache, error) {
 	}
 
 	return &RedisCache{
-		client: client,
-		keyGen: internal.NewKeyGenerator(),
-		config: config,
+		client:    client,
+		keyGen:    internal.NewKeyGenerator(),
+		config:    config,
+		validator: internal.NewInputValidator(),
 	}, nil
 }
 
 // NewRedisCacheWithDependencies creates a new Redis cache with injected dependencies for testing
 func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen internal.KeyGenerator, config *RedisConfig) *RedisCache {
 	return &RedisCache{
-		client: client,
-		keyGen: keyGen,
-		config: config,
+		client:    client,
+		keyGen:    keyGen,
+		config:    config,
+		validator: internal.NewInputValidator(),
 	}
 }
 
 // StoreDiagram stores a PlantUML diagram with TTL support
 func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error {
-	if name == "" {
-		return NewValidationError("diagram name cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	if pumlContent == "" {
-		return NewValidationError("diagram content cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "diagram name")
+	if err != nil {
+		return err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.DiagramKey(name)
+	sanitizedContent, err := rc.validator.ValidateAndSanitizeContent(pumlContent, "diagram content")
+	if err != nil {
+		return err
+	}
+
+	// Validate TTL
+	if err := rc.validator.ValidateTTL(ttl, true); err != nil {
+		return err
+	}
+
+	// Generate cache key using sanitized name
+	key := rc.keyGen.DiagramKey(sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -220,8 +236,8 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 		ttl = rc.config.DefaultTTL
 	}
 
-	// Store the diagram content in Redis
-	err := rc.client.SetWithRetry(ctx, key, pumlContent, ttl)
+	// Store the sanitized diagram content in Redis
+	err = rc.client.SetWithRetry(ctx, key, sanitizedContent, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
 			return NewTimeoutError(key, "timeout storing diagram", err)
@@ -229,7 +245,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 		if isConnectionError(err) {
 			return NewConnectionError("failed to store diagram", err)
 		}
-		return fmt.Errorf("failed to store diagram '%s': %w", name, err)
+		return fmt.Errorf("failed to store diagram '%s': %w", sanitizedName, err)
 	}
 
 	return nil
@@ -237,12 +253,19 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 
 // GetDiagram retrieves a PlantUML diagram with error handling
 func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, error) {
-	if name == "" {
-		return "", NewValidationError("diagram name cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return "", err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.DiagramKey(name)
+	// Validate and sanitize name
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "diagram name")
+	if err != nil {
+		return "", err
+	}
+
+	// Generate cache key using sanitized name
+	key := rc.keyGen.DiagramKey(sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -261,7 +284,7 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 		if isConnectionError(err) {
 			return "", NewConnectionError("failed to retrieve diagram", err)
 		}
-		return "", fmt.Errorf("failed to retrieve diagram '%s': %w", name, err)
+		return "", fmt.Errorf("failed to retrieve diagram '%s': %w", sanitizedName, err)
 	}
 
 	return content, nil
@@ -269,12 +292,19 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 
 // DeleteDiagram removes a diagram from the cache for cleanup
 func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
-	if name == "" {
-		return NewValidationError("diagram name cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.DiagramKey(name)
+	// Validate and sanitize name
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "diagram name")
+	if err != nil {
+		return err
+	}
+
+	// Generate cache key using sanitized name
+	key := rc.keyGen.DiagramKey(sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -282,7 +312,7 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 	}
 
 	// Delete the diagram from Redis
-	err := rc.client.DelWithRetry(ctx, key)
+	err = rc.client.DelWithRetry(ctx, key)
 	if err != nil {
 		if isTimeoutError(err) {
 			return NewTimeoutError(key, "timeout deleting diagram", err)
@@ -290,7 +320,7 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 		if isConnectionError(err) {
 			return NewConnectionError("failed to delete diagram", err)
 		}
-		return fmt.Errorf("failed to delete diagram '%s': %w", name, err)
+		return fmt.Errorf("failed to delete diagram '%s': %w", sanitizedName, err)
 	}
 
 	return nil
@@ -298,29 +328,42 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 
 // StoreStateMachine stores a parsed state machine with TTL support and creates entity cache paths
 func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error {
-	if umlVersion == "" {
-		return NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	if name == "" {
-		return NewValidationError("state machine name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return err
 	}
 
-	if machine == nil {
-		return NewValidationError("state machine cannot be nil", nil)
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "state machine name")
+	if err != nil {
+		return err
+	}
+
+	if err := rc.validator.ValidateEntityData(machine, "state machine"); err != nil {
+		return err
+	}
+
+	// Validate TTL
+	if err := rc.validator.ValidateTTL(ttl, true); err != nil {
+		return err
 	}
 
 	// Validate that the corresponding diagram exists before storing state machine
-	_, err := rc.GetDiagram(ctx, name)
+	_, err = rc.GetDiagram(ctx, sanitizedName)
 	if err != nil {
 		if IsNotFoundError(err) {
-			return NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", name), err)
+			return NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", sanitizedName), err)
 		}
-		return fmt.Errorf("failed to validate diagram existence for state machine '%s': %w", name, err)
+		return fmt.Errorf("failed to validate diagram existence for state machine '%s': %w", sanitizedName, err)
 	}
 
-	// Generate cache key
-	key := rc.keyGen.StateMachineKey(umlVersion, name)
+	// Generate cache key using sanitized inputs
+	key := rc.keyGen.StateMachineKey(sanitizedVersion, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -363,7 +406,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	// Store each entity and populate the Entities map with cache paths
 	for _, entityID := range entityIDs {
 		entity := entities[entityID]
-		entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
+		entityKey := rc.keyGen.EntityKey(sanitizedVersion, sanitizedName, entityID)
 
 		// Validate entity key before storing
 		if err := rc.keyGen.ValidateKey(entityKey); err != nil {
@@ -373,11 +416,11 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 		// Update the Entities mapping for referential integrity
 		machine.Entities[entityID] = entityKey
 
-		// Store the entity
-		err := rc.StoreEntity(ctx, umlVersion, name, entityID, entity, ttl)
+		// Store the entity using sanitized values
+		err := rc.StoreEntity(ctx, sanitizedVersion, sanitizedName, entityID, entity, ttl)
 		if err != nil {
 			// If entity storage fails, clean up any previously stored entities to maintain consistency
-			rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
+			rc.cleanupPartialEntityStorage(ctx, sanitizedVersion, sanitizedName, machine.Entities)
 			return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
 		}
 	}
@@ -386,7 +429,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	data, err := json.Marshal(machine)
 	if err != nil {
 		// Clean up entities if state machine serialization fails
-		rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
+		rc.cleanupPartialEntityStorage(ctx, sanitizedVersion, sanitizedName, machine.Entities)
 		return NewSerializationError(key, "failed to marshal state machine", err)
 	}
 
@@ -394,7 +437,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	err = rc.client.SetWithRetry(ctx, key, data, ttl)
 	if err != nil {
 		// Clean up entities if state machine storage fails
-		rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
+		rc.cleanupPartialEntityStorage(ctx, sanitizedVersion, sanitizedName, machine.Entities)
 
 		if isTimeoutError(err) {
 			return NewTimeoutError(key, "timeout storing state machine", err)
@@ -402,7 +445,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 		if isConnectionError(err) {
 			return NewConnectionError("failed to store state machine", err)
 		}
-		return fmt.Errorf("failed to store state machine '%s': %w", name, err)
+		return fmt.Errorf("failed to store state machine '%s': %w", sanitizedName, err)
 	}
 
 	return nil
@@ -410,16 +453,24 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 
 // GetStateMachine retrieves a parsed state machine
 func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name string) (*models.StateMachine, error) {
-	if umlVersion == "" {
-		return nil, NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return nil, err
 	}
 
-	if name == "" {
-		return nil, NewValidationError("state machine name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return nil, err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.StateMachineKey(umlVersion, name)
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "state machine name")
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate cache key using sanitized inputs
+	key := rc.keyGen.StateMachineKey(sanitizedVersion, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -438,7 +489,7 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 		if isConnectionError(err) {
 			return nil, NewConnectionError("failed to retrieve state machine", err)
 		}
-		return nil, fmt.Errorf("failed to retrieve state machine '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to retrieve state machine '%s': %w", sanitizedName, err)
 	}
 
 	// Deserialize the state machine from JSON
@@ -453,16 +504,24 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 
 // DeleteStateMachine removes a state machine from the cache with cascade deletion
 func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name string) error {
-	if umlVersion == "" {
-		return NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	if name == "" {
-		return NewValidationError("state machine name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return err
 	}
 
-	// Generate cache key for the state machine
-	key := rc.keyGen.StateMachineKey(umlVersion, name)
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "state machine name")
+	if err != nil {
+		return err
+	}
+
+	// Generate cache key for the state machine using sanitized inputs
+	key := rc.keyGen.StateMachineKey(sanitizedVersion, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -470,7 +529,7 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 	}
 
 	// First, try to retrieve the state machine to get entity information for cascade deletion
-	machine, err := rc.GetStateMachine(ctx, umlVersion, name)
+	machine, err := rc.GetStateMachine(ctx, sanitizedVersion, sanitizedName)
 	if err != nil && !IsNotFoundError(err) {
 		return fmt.Errorf("failed to retrieve state machine for cascade deletion: %w", err)
 	}
@@ -497,14 +556,14 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 		}
 
 		for _, entityID := range entityIDs {
-			entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
+			entityKey := rc.keyGen.EntityKey(sanitizedVersion, sanitizedName, entityID)
 			keysToDelete = append(keysToDelete, entityKey)
 		}
 	}
 
 	// Additional safety check: scan for any orphaned entity keys that might exist
 	// but aren't tracked in the Entities map to ensure complete cleanup
-	entityPattern := rc.keyGen.EntityKey(umlVersion, name, "*")
+	entityPattern := rc.keyGen.EntityKey(sanitizedVersion, sanitizedName, "*")
 	orphanedKeys, err := rc.scanForOrphanedEntities(ctx, entityPattern, machine)
 	if err != nil {
 		// Log the error but don't fail the deletion - this is a best-effort cleanup
@@ -523,7 +582,7 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 			if isConnectionError(err) {
 				return NewConnectionError("failed to delete state machine and entities", err)
 			}
-			return fmt.Errorf("failed to delete state machine '%s' and its entities: %w", name, err)
+			return fmt.Errorf("failed to delete state machine '%s' and its entities: %w", sanitizedName, err)
 		}
 	}
 
@@ -565,24 +624,38 @@ func (rc *RedisCache) scanForOrphanedEntities(ctx context.Context, pattern strin
 
 // StoreEntity stores a state machine entity with TTL support
 func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, entityID string, entity interface{}, ttl time.Duration) error {
-	if umlVersion == "" {
-		return NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	if diagramName == "" {
-		return NewValidationError("diagram name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return err
 	}
 
-	if entityID == "" {
-		return NewValidationError("entity ID cannot be empty", nil)
+	sanitizedDiagramName, err := rc.validator.ValidateAndSanitizeName(diagramName, "diagram name")
+	if err != nil {
+		return err
 	}
 
-	if entity == nil {
-		return NewValidationError("entity cannot be nil", nil)
+	sanitizedEntityID, err := rc.validator.ValidateAndSanitizeName(entityID, "entity ID")
+	if err != nil {
+		return err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+	if err := rc.validator.ValidateEntityData(entity, "entity"); err != nil {
+		return err
+	}
+
+	// Validate TTL
+	if err := rc.validator.ValidateTTL(ttl, true); err != nil {
+		return err
+	}
+
+	// Generate cache key using sanitized inputs
+	key := rc.keyGen.EntityKey(sanitizedVersion, sanitizedDiagramName, sanitizedEntityID)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -609,7 +682,7 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 		if isConnectionError(err) {
 			return NewConnectionError("failed to store entity", err)
 		}
-		return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
+		return fmt.Errorf("failed to store entity '%s': %w", sanitizedEntityID, err)
 	}
 
 	return nil
@@ -618,28 +691,41 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 // UpdateStateMachineEntityMapping updates the Entities mapping in a stored state machine
 // This ensures referential integrity when entities are added or removed independently
 func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVersion, name string, entityID, entityKey string, operation string) error {
-	if umlVersion == "" {
-		return NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return err
 	}
 
-	if name == "" {
-		return NewValidationError("state machine name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return err
 	}
 
-	if entityID == "" {
-		return NewValidationError("entity ID cannot be empty", nil)
+	sanitizedName, err := rc.validator.ValidateAndSanitizeName(name, "state machine name")
+	if err != nil {
+		return err
 	}
 
-	if operation != "add" && operation != "remove" {
-		return NewValidationError("operation must be 'add' or 'remove'", nil)
+	sanitizedEntityID, err := rc.validator.ValidateAndSanitizeName(entityID, "entity ID")
+	if err != nil {
+		return err
 	}
 
-	if operation == "add" && entityKey == "" {
-		return NewValidationError("entity key cannot be empty for add operation", nil)
+	if err := rc.validator.ValidateOperation(operation); err != nil {
+		return err
 	}
 
-	// Get the current state machine
-	machine, err := rc.GetStateMachine(ctx, umlVersion, name)
+	if operation == "add" {
+		sanitizedEntityKey, err := rc.validator.ValidateAndSanitizeString(entityKey, "entity key")
+		if err != nil {
+			return err
+		}
+		entityKey = sanitizedEntityKey
+	}
+
+	// Get the current state machine using sanitized inputs
+	machine, err := rc.GetStateMachine(ctx, sanitizedVersion, sanitizedName)
 	if err != nil {
 		return fmt.Errorf("failed to get state machine for entity mapping update: %w", err)
 	}
@@ -652,13 +738,13 @@ func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVe
 	// Update the mapping based on operation
 	switch operation {
 	case "add":
-		machine.Entities[entityID] = entityKey
+		machine.Entities[sanitizedEntityID] = entityKey
 	case "remove":
-		delete(machine.Entities, entityID)
+		delete(machine.Entities, sanitizedEntityID)
 	}
 
-	// Store the updated state machine
-	key := rc.keyGen.StateMachineKey(umlVersion, name)
+	// Store the updated state machine using sanitized inputs
+	key := rc.keyGen.StateMachineKey(sanitizedVersion, sanitizedName)
 	data, err := json.Marshal(machine)
 	if err != nil {
 		return NewSerializationError(key, "failed to marshal updated state machine", err)
@@ -743,20 +829,29 @@ func (rc *RedisCache) extractEntitiesFromRegion(region *models.Region, entities 
 
 // GetEntity retrieves a state machine entity
 func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, entityID string) (interface{}, error) {
-	if umlVersion == "" {
-		return nil, NewValidationError("UML version cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return nil, err
 	}
 
-	if diagramName == "" {
-		return nil, NewValidationError("diagram name cannot be empty", nil)
+	// Validate and sanitize inputs
+	sanitizedVersion, err := rc.validator.ValidateAndSanitizeVersion(umlVersion, "UML version")
+	if err != nil {
+		return nil, err
 	}
 
-	if entityID == "" {
-		return nil, NewValidationError("entity ID cannot be empty", nil)
+	sanitizedDiagramName, err := rc.validator.ValidateAndSanitizeName(diagramName, "diagram name")
+	if err != nil {
+		return nil, err
 	}
 
-	// Generate cache key
-	key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+	sanitizedEntityID, err := rc.validator.ValidateAndSanitizeName(entityID, "entity ID")
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate cache key using sanitized inputs
+	key := rc.keyGen.EntityKey(sanitizedVersion, sanitizedDiagramName, sanitizedEntityID)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -775,7 +870,7 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 		if isConnectionError(err) {
 			return nil, NewConnectionError("failed to retrieve entity", err)
 		}
-		return nil, fmt.Errorf("failed to retrieve entity '%s': %w", entityID, err)
+		return nil, fmt.Errorf("failed to retrieve entity '%s': %w", sanitizedEntityID, err)
 	}
 
 	// Deserialize the entity from JSON
@@ -910,17 +1005,23 @@ func (rc *RedisCache) Cleanup(ctx context.Context, pattern string) error {
 
 // CleanupWithOptions removes cache entries matching a pattern with configurable options
 func (rc *RedisCache) CleanupWithOptions(ctx context.Context, pattern string, options *CleanupOptions) (*CleanupResult, error) {
-	if pattern == "" {
-		return nil, NewValidationError("cleanup pattern cannot be empty", nil)
+	// Validate context
+	if err := rc.validator.ValidateContext(ctx); err != nil {
+		return nil, err
+	}
+
+	// Validate and sanitize pattern
+	if err := rc.validator.ValidateCleanupPattern(pattern); err != nil {
+		return nil, err
 	}
 
 	if options == nil {
 		options = DefaultCleanupOptions()
 	}
 
-	// Validate options
-	if err := rc.validateCleanupOptions(options); err != nil {
-		return nil, NewValidationError(fmt.Sprintf("invalid cleanup options: %v", err), err)
+	// Validate options using enhanced validation logic
+	if err := rc.validateCleanupOptionsEnhanced(options); err != nil {
+		return nil, err
 	}
 
 	startTime := time.Now()
@@ -1019,23 +1120,47 @@ func (rc *RedisCache) CleanupWithOptions(ctx context.Context, pattern string, op
 	return result, nil
 }
 
-// validateCleanupOptions validates cleanup options
+// validateCleanupOptions validates cleanup options (legacy method)
 func (rc *RedisCache) validateCleanupOptions(options *CleanupOptions) error {
+	return rc.validateCleanupOptionsEnhanced(options)
+}
+
+// validateCleanupOptionsEnhanced validates cleanup options with enhanced security checks
+func (rc *RedisCache) validateCleanupOptionsEnhanced(options *CleanupOptions) error {
+	if options == nil {
+		return NewValidationError("cleanup options cannot be nil", nil)
+	}
+
 	if options.BatchSize <= 0 {
-		return fmt.Errorf("batch size must be positive, got %d", options.BatchSize)
+		return NewValidationError(fmt.Sprintf("batch size must be positive, got %d", options.BatchSize), nil)
 	}
+
 	if options.BatchSize > 1000 {
-		return fmt.Errorf("batch size too large (max 1000), got %d", options.BatchSize)
+		return NewValidationError(fmt.Sprintf("batch size too large (max 1000), got %d", options.BatchSize), nil)
 	}
+
 	if options.ScanCount <= 0 {
-		return fmt.Errorf("scan count must be positive, got %d", options.ScanCount)
+		return NewValidationError(fmt.Sprintf("scan count must be positive, got %d", options.ScanCount), nil)
 	}
+
+	if options.ScanCount > 10000 {
+		return NewValidationError(fmt.Sprintf("scan count too large (max 10000), got %d", options.ScanCount), nil)
+	}
+
 	if options.MaxKeys < 0 {
-		return fmt.Errorf("max keys cannot be negative, got %d", options.MaxKeys)
+		return NewValidationError(fmt.Sprintf("max keys cannot be negative, got %d", options.MaxKeys), nil)
 	}
+
 	if options.Timeout < 0 {
-		return fmt.Errorf("timeout cannot be negative, got %v", options.Timeout)
+		return NewValidationError(fmt.Sprintf("timeout cannot be negative, got %v", options.Timeout), nil)
 	}
+
+	// Check for reasonable timeout limits
+	maxTimeout := 30 * time.Minute
+	if options.Timeout > maxTimeout {
+		return NewValidationError(fmt.Sprintf("timeout exceeds maximum allowed duration of %v", options.Timeout), nil)
+	}
+
 	return nil
 }
 
