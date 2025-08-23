@@ -235,6 +235,15 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 		return NewValidationError("state machine cannot be nil", nil)
 	}
 
+	// Validate that the corresponding diagram exists before storing state machine
+	_, err := rc.GetDiagram(ctx, name)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", name), err)
+		}
+		return fmt.Errorf("failed to validate diagram existence for state machine '%s': %w", name, err)
+	}
+
 	// Generate cache key
 	key := rc.keyGen.StateMachineKey(umlVersion, name)
 
@@ -312,7 +321,7 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 	return &machine, nil
 }
 
-// DeleteStateMachine removes a state machine from the cache
+// DeleteStateMachine removes a state machine from the cache with cascade deletion
 func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name string) error {
 	if umlVersion == "" {
 		return NewValidationError("UML version cannot be empty", nil)
@@ -322,7 +331,7 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 		return NewValidationError("state machine name cannot be empty", nil)
 	}
 
-	// Generate cache key
+	// Generate cache key for the state machine
 	key := rc.keyGen.StateMachineKey(umlVersion, name)
 
 	// Validate the generated key
@@ -330,16 +339,40 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
-	// Delete the state machine from Redis
-	err := rc.client.DelWithRetry(ctx, key)
-	if err != nil {
-		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout deleting state machine", err)
+	// First, try to retrieve the state machine to get entity information for cascade deletion
+	machine, err := rc.GetStateMachine(ctx, umlVersion, name)
+	if err != nil && !IsNotFoundError(err) {
+		return fmt.Errorf("failed to retrieve state machine for cascade deletion: %w", err)
+	}
+
+	// Collect all keys to delete (state machine + entities)
+	var keysToDelete []string
+	keysToDelete = append(keysToDelete, key)
+
+	// If state machine exists and has entities, add entity keys for cascade deletion
+	if machine != nil && machine.Entities != nil {
+		for entityID := range machine.Entities {
+			entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
+			keysToDelete = append(keysToDelete, entityKey)
 		}
-		if isConnectionError(err) {
-			return NewConnectionError("failed to delete state machine", err)
+	}
+
+	// Note: In a production system, you might also want to use Redis SCAN to find
+	// additional entity keys that might exist but aren't tracked in the Entities map.
+	// For now, we rely on the Entities map for cascade deletion.
+
+	// Delete all keys (state machine + entities) in a single operation
+	if len(keysToDelete) > 0 {
+		err = rc.client.DelWithRetry(ctx, keysToDelete...)
+		if err != nil {
+			if isTimeoutError(err) {
+				return NewTimeoutError(key, "timeout deleting state machine and entities", err)
+			}
+			if isConnectionError(err) {
+				return NewConnectionError("failed to delete state machine and entities", err)
+			}
+			return fmt.Errorf("failed to delete state machine '%s' and its entities: %w", name, err)
 		}
-		return fmt.Errorf("failed to delete state machine '%s': %w", name, err)
 	}
 
 	return nil

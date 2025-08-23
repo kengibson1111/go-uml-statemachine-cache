@@ -63,6 +63,13 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// Mock diagram existence check (required for task 6.2)
+				diagramKey := "/diagrams/puml/TestStateMachine"
+				mockKeyGen.On("DiagramKey", "TestStateMachine").Return(diagramKey)
+				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
+				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
+
+				// Mock state machine storage
 				expectedKey := "/machines/1.0/TestStateMachine"
 				mockKeyGen.On("StateMachineKey", "1.0", "TestStateMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
@@ -80,6 +87,13 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			ttl:         0, // Should use default TTL
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// Mock diagram existence check (required for task 6.2)
+				diagramKey := "/diagrams/puml/DefaultTTLMachine"
+				mockKeyGen.On("DiagramKey", "DefaultTTLMachine").Return(diagramKey)
+				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
+				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
+
+				// Mock state machine storage
 				expectedKey := "/machines/2.0/DefaultTTLMachine"
 				mockKeyGen.On("StateMachineKey", "2.0", "DefaultTTLMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
@@ -125,6 +139,22 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			},
 		},
 		{
+			name:        "diagram does not exist (task 6.2 requirement)",
+			umlVersion:  "1.0",
+			machineName: "NonExistentDiagram",
+			machine:     sampleStateMachine,
+			ttl:         time.Hour,
+			expectError: true,
+			errorType:   CacheErrorTypeValidation,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// Mock diagram existence check - diagram not found
+				diagramKey := "/diagrams/puml/NonExistentDiagram"
+				mockKeyGen.On("DiagramKey", "NonExistentDiagram").Return(diagramKey)
+				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
+				mockClient.On("GetWithRetry", ctx, diagramKey).Return("", redis.Nil)
+			},
+		},
+		{
 			name:        "versioned cache path handling",
 			umlVersion:  "2.1.0",
 			machineName: "VersionedMachine",
@@ -132,6 +162,13 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// Mock diagram existence check (required for task 6.2)
+				diagramKey := "/diagrams/puml/VersionedMachine"
+				mockKeyGen.On("DiagramKey", "VersionedMachine").Return(diagramKey)
+				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
+				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
+
+				// Mock state machine storage
 				expectedKey := "/machines/2.1.0/VersionedMachine"
 				mockKeyGen.On("StateMachineKey", "2.1.0", "VersionedMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
@@ -318,6 +355,17 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 func TestRedisCache_DeleteStateMachine(t *testing.T) {
 	ctx := context.Background()
 
+	// Create a sample state machine with entities for cascade deletion testing
+	sampleStateMachineWithEntities := &models.StateMachine{
+		ID:      "test-machine-with-entities",
+		Name:    "TestStateMachineWithEntities",
+		Version: "1.0",
+		Entities: map[string]string{
+			"state-1":      "/machines/1.0/TestStateMachine/entities/state-1",
+			"transition-1": "/machines/1.0/TestStateMachine/entities/transition-1",
+		},
+	}
+
 	tests := []struct {
 		name        string
 		umlVersion  string
@@ -327,7 +375,7 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
-			name:        "delete existing state machine",
+			name:        "delete existing state machine with cascade deletion (task 6.2)",
 			umlVersion:  "1.0",
 			machineName: "TestStateMachine",
 			expectError: false,
@@ -335,7 +383,22 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 				expectedKey := "/machines/1.0/TestStateMachine"
 				mockKeyGen.On("StateMachineKey", "1.0", "TestStateMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
-				mockClient.On("DelWithRetry", ctx, []string{expectedKey}).Return(nil)
+
+				// Mock getting the state machine for cascade deletion
+				expectedData, _ := json.Marshal(sampleStateMachineWithEntities)
+				mockClient.On("GetWithRetry", ctx, expectedKey).Return(string(expectedData), nil)
+
+				// Mock entity key generation for cascade deletion
+				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "state-1").Return("/machines/1.0/TestStateMachine/entities/state-1")
+				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "transition-1").Return("/machines/1.0/TestStateMachine/entities/transition-1")
+
+				// Mock the deletion of state machine and entities
+				expectedKeys := []string{
+					expectedKey,
+					"/machines/1.0/TestStateMachine/entities/state-1",
+					"/machines/1.0/TestStateMachine/entities/transition-1",
+				}
+				mockClient.On("DelWithRetry", ctx, expectedKeys).Return(nil)
 			},
 		},
 		{
@@ -347,6 +410,11 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 				expectedKey := "/machines/1.0/NonExistentMachine"
 				mockKeyGen.On("StateMachineKey", "1.0", "NonExistentMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
+
+				// Mock getting the state machine - not found
+				mockClient.On("GetWithRetry", ctx, expectedKey).Return("", redis.Nil)
+
+				// Mock the deletion of just the state machine key
 				mockClient.On("DelWithRetry", ctx, []string{expectedKey}).Return(nil)
 			},
 		},
@@ -547,6 +615,13 @@ func TestVersionedCachePaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Mock diagram existence check (required for task 6.2)
+			diagramKey := "/diagrams/puml/" + tt.machineName
+			mockKeyGen.On("DiagramKey", tt.machineName).Return(diagramKey)
+			mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
+			mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
+
+			// Mock state machine storage
 			mockKeyGen.On("StateMachineKey", tt.umlVersion, tt.machineName).Return(tt.expectedKey)
 			mockKeyGen.On("ValidateKey", tt.expectedKey).Return(nil)
 
@@ -566,4 +641,29 @@ func TestVersionedCachePaths(t *testing.T) {
 			mockKeyGen.ExpectedCalls = nil
 		})
 	}
+}
+func TestRedisCache_GetStateMachine_DeserializationError(t *testing.T) {
+	ctx := context.Background()
+	mockClient := NewMockRedisClient()
+	mockKeyGen := NewMockKeyGenerator()
+	config := &RedisConfig{DefaultTTL: time.Hour}
+
+	// Setup mock to return invalid JSON (task 6.2 requirement)
+	expectedKey := "/machines/1.0/TestStateMachine"
+	mockKeyGen.On("StateMachineKey", "1.0", "TestStateMachine").Return(expectedKey)
+	mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
+	mockClient.On("GetWithRetry", ctx, expectedKey).Return("invalid json", nil)
+
+	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
+	machine, err := cache.GetStateMachine(ctx, "1.0", "TestStateMachine")
+
+	require.Error(t, err)
+	assert.Nil(t, machine)
+	cacheErr, ok := err.(*CacheError)
+	require.True(t, ok, "expected CacheError, got %T", err)
+	assert.Equal(t, CacheErrorTypeSerialization, cacheErr.Type)
+
+	mockClient.AssertExpectations(t)
+	mockKeyGen.AssertExpectations(t)
 }
