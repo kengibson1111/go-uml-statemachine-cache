@@ -69,6 +69,18 @@ func DefaultConfig() *Config {
 	}
 }
 
+// RedisClientInterface defines the interface for Redis client operations
+type RedisClientInterface interface {
+	Health(ctx context.Context) error
+	HealthWithRetry(ctx context.Context) error
+	SetWithRetry(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	GetWithRetry(ctx context.Context, key string) (string, error)
+	DelWithRetry(ctx context.Context, keys ...string) error
+	Client() *redis.Client
+	Config() *Config
+	Close() error
+}
+
 // RedisClient wraps the go-redis client with additional functionality
 type RedisClient struct {
 	client *redis.Client

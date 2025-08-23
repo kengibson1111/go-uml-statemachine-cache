@@ -14,7 +14,7 @@ import (
 
 // RedisCache implements the Cache interface using Redis as the backend
 type RedisCache struct {
-	client *internal.RedisClient
+	client internal.RedisClientInterface
 	keyGen internal.KeyGenerator
 	config *internal.Config
 }
@@ -31,6 +31,15 @@ func NewRedisCache(config *internal.Config) (*RedisCache, error) {
 		keyGen: internal.NewKeyGenerator(),
 		config: config,
 	}, nil
+}
+
+// NewRedisCacheWithDependencies creates a new Redis cache with injected dependencies for testing
+func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen internal.KeyGenerator, config *internal.Config) *RedisCache {
+	return &RedisCache{
+		client: client,
+		keyGen: keyGen,
+		config: config,
+	}
 }
 
 // StoreDiagram stores a PlantUML diagram with TTL support

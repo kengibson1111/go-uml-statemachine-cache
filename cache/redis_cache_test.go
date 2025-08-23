@@ -5,16 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
 
 func TestRedisCache_StoreDiagram(t *testing.T) {
-	// Skip if Redis is not available
-	cache, cleanup := setupTestCache(t)
-	defer cleanup()
-
 	ctx := context.Background()
 
 	tests := []struct {
@@ -24,6 +22,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		ttl         time.Duration
 		expectError bool
 		errorType   internal.ErrorType
+		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
 			name:        "valid diagram storage",
@@ -31,6 +30,11 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\nstate B\nA --> B\n@enduml",
 			ttl:         time.Hour,
 			expectError: false,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "test-diagram").Return("/diagrams/puml/test-diagram")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour).Return(nil)
+			},
 		},
 		{
 			name:        "valid diagram with default TTL",
@@ -38,6 +42,11 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate X\nstate Y\nX --> Y\n@enduml",
 			ttl:         0, // Should use default TTL
 			expectError: false,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "test-diagram-default-ttl").Return("/diagrams/puml/test-diagram-default-ttl")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram-default-ttl").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram-default-ttl", "@startuml\nstate X\nstate Y\nX --> Y\n@enduml", time.Hour).Return(nil)
+			},
 		},
 		{
 			name:        "empty diagram name",
@@ -46,6 +55,9 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			ttl:         time.Hour,
 			expectError: true,
 			errorType:   internal.ErrorTypeValidation,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// No mocks needed for validation errors
+			},
 		},
 		{
 			name:        "empty content",
@@ -54,6 +66,9 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			ttl:         time.Hour,
 			expectError: true,
 			errorType:   internal.ErrorTypeValidation,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// No mocks needed for validation errors
+			},
 		},
 		{
 			name:        "diagram with special characters",
@@ -61,11 +76,24 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate \"State with spaces\"\n@enduml",
 			ttl:         time.Hour,
 			expectError: false,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "test/diagram-with-special_chars.puml").Return("/diagrams/puml/test%2Fdiagram-with-special_chars.puml")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test%2Fdiagram-with-special_chars.puml").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test%2Fdiagram-with-special_chars.puml", "@startuml\nstate \"State with spaces\"\n@enduml", time.Hour).Return(nil)
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mockClient := NewMockRedisClient()
+			mockKeyGen := NewMockKeyGenerator()
+			config := &internal.Config{DefaultTTL: time.Hour}
+
+			tt.setupMocks(mockClient, mockKeyGen)
+
+			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
 			err := cache.StoreDiagram(ctx, tt.diagramName, tt.content, tt.ttl)
 
 			if tt.expectError {
@@ -77,27 +105,16 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err)
-
-				// Verify the diagram was stored by retrieving it
-				retrieved, err := cache.GetDiagram(ctx, tt.diagramName)
-				require.NoError(t, err)
-				assert.Equal(t, tt.content, retrieved)
 			}
+
+			mockClient.AssertExpectations(t)
+			mockKeyGen.AssertExpectations(t)
 		})
 	}
 }
 
 func TestRedisCache_GetDiagram(t *testing.T) {
-	cache, cleanup := setupTestCache(t)
-	defer cleanup()
-
 	ctx := context.Background()
-
-	// Store a test diagram first
-	testName := "test-get-diagram"
-	testContent := "@startuml\nstate A\nstate B\nA --> B\n@enduml"
-	err := cache.StoreDiagram(ctx, testName, testContent, time.Hour)
-	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -105,29 +122,51 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 		expectError bool
 		errorType   internal.ErrorType
 		expected    string
+		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
 			name:        "retrieve existing diagram",
-			diagramName: testName,
+			diagramName: "test-get-diagram",
 			expectError: false,
-			expected:    testContent,
+			expected:    "@startuml\nstate A\nstate B\nA --> B\n@enduml",
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "test-get-diagram").Return("/diagrams/puml/test-get-diagram")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-get-diagram").Return(nil)
+				mockClient.On("GetWithRetry", ctx, "/diagrams/puml/test-get-diagram").Return("@startuml\nstate A\nstate B\nA --> B\n@enduml", nil)
+			},
 		},
 		{
 			name:        "retrieve non-existent diagram",
 			diagramName: "non-existent-diagram",
 			expectError: true,
 			errorType:   internal.ErrorTypeNotFound,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return("/diagrams/puml/non-existent-diagram")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/non-existent-diagram").Return(nil)
+				mockClient.On("GetWithRetry", ctx, "/diagrams/puml/non-existent-diagram").Return("", redis.Nil)
+			},
 		},
 		{
 			name:        "empty diagram name",
 			diagramName: "",
 			expectError: true,
 			errorType:   internal.ErrorTypeValidation,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// No mocks needed for validation errors
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mockClient := NewMockRedisClient()
+			mockKeyGen := NewMockKeyGenerator()
+			config := &internal.Config{DefaultTTL: time.Hour}
+
+			tt.setupMocks(mockClient, mockKeyGen)
+
+			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
 			content, err := cache.GetDiagram(ctx, tt.diagramName)
 
 			if tt.expectError {
@@ -142,48 +181,64 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expected, content)
 			}
+
+			mockClient.AssertExpectations(t)
+			mockKeyGen.AssertExpectations(t)
 		})
 	}
 }
 
 func TestRedisCache_DeleteDiagram(t *testing.T) {
-	cache, cleanup := setupTestCache(t)
-	defer cleanup()
-
 	ctx := context.Background()
-
-	// Store a test diagram first
-	testName := "test-delete-diagram"
-	testContent := "@startuml\nstate A\n@enduml"
-	err := cache.StoreDiagram(ctx, testName, testContent, time.Hour)
-	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
 		diagramName string
 		expectError bool
 		errorType   internal.ErrorType
+		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
 			name:        "delete existing diagram",
-			diagramName: testName,
+			diagramName: "test-delete-diagram",
 			expectError: false,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "test-delete-diagram").Return("/diagrams/puml/test-delete-diagram")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-delete-diagram").Return(nil)
+				mockClient.On("DelWithRetry", ctx, []string{"/diagrams/puml/test-delete-diagram"}).Return(nil)
+			},
 		},
 		{
 			name:        "delete non-existent diagram (should not error)",
 			diagramName: "non-existent-diagram",
 			expectError: false,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return("/diagrams/puml/non-existent-diagram")
+				mockKeyGen.On("ValidateKey", "/diagrams/puml/non-existent-diagram").Return(nil)
+				mockClient.On("DelWithRetry", ctx, []string{"/diagrams/puml/non-existent-diagram"}).Return(nil)
+			},
 		},
 		{
 			name:        "empty diagram name",
 			diagramName: "",
 			expectError: true,
 			errorType:   internal.ErrorTypeValidation,
+			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
+				// No mocks needed for validation errors
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mockClient := NewMockRedisClient()
+			mockKeyGen := NewMockKeyGenerator()
+			config := &internal.Config{DefaultTTL: time.Hour}
+
+			tt.setupMocks(mockClient, mockKeyGen)
+
+			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
 			err := cache.DeleteDiagram(ctx, tt.diagramName)
 
 			if tt.expectError {
@@ -195,98 +250,85 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err)
-
-				// If we deleted an existing diagram, verify it's gone
-				if tt.diagramName == testName {
-					_, err := cache.GetDiagram(ctx, tt.diagramName)
-					require.Error(t, err)
-					assert.True(t, internal.IsNotFoundError(err))
-				}
 			}
+
+			mockClient.AssertExpectations(t)
+			mockKeyGen.AssertExpectations(t)
 		})
 	}
 }
 
-func TestRedisCache_DiagramTTL(t *testing.T) {
-	cache, cleanup := setupTestCache(t)
-	defer cleanup()
-
+func TestRedisCache_KeyValidationError(t *testing.T) {
 	ctx := context.Background()
+	mockClient := NewMockRedisClient()
+	mockKeyGen := NewMockKeyGenerator()
+	config := &internal.Config{DefaultTTL: time.Hour}
 
-	// Store a diagram with a very short TTL
-	testName := "test-ttl-diagram"
-	testContent := "@startuml\nstate A\n@enduml"
-	shortTTL := 100 * time.Millisecond
+	// Setup mock to return key validation error
+	mockKeyGen.On("DiagramKey", "test-diagram").Return("/invalid/key")
+	mockKeyGen.On("ValidateKey", "/invalid/key").Return(internal.NewKeyInvalidError("/invalid/key", "invalid key format"))
 
-	err := cache.StoreDiagram(ctx, testName, testContent, shortTTL)
-	require.NoError(t, err)
+	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-	// Verify it exists immediately
-	content, err := cache.GetDiagram(ctx, testName)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, content)
+	err := cache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
-	// Wait for TTL to expire
-	time.Sleep(shortTTL + 50*time.Millisecond)
-
-	// Verify it's gone
-	_, err = cache.GetDiagram(ctx, testName)
 	require.Error(t, err)
-	assert.True(t, internal.IsNotFoundError(err))
+	cacheErr, ok := err.(*internal.CacheError)
+	require.True(t, ok, "expected CacheError, got %T", err)
+	assert.Equal(t, internal.ErrorTypeKeyInvalid, cacheErr.Type)
+
+	mockKeyGen.AssertExpectations(t)
 }
 
-func TestRedisCache_DiagramOperationsIntegration(t *testing.T) {
-	cache, cleanup := setupTestCache(t)
-	defer cleanup()
-
+func TestRedisCache_RedisConnectionError(t *testing.T) {
 	ctx := context.Background()
+	mockClient := NewMockRedisClient()
+	mockKeyGen := NewMockKeyGenerator()
+	config := &internal.Config{DefaultTTL: time.Hour}
 
-	// Test complete workflow: store -> get -> delete -> verify gone
-	diagramName := "integration-test-diagram"
-	content := "@startuml\nstate Start\nstate End\nStart --> End\n@enduml"
+	// Setup mocks for successful key generation but Redis connection error
+	mockKeyGen.On("DiagramKey", "test-diagram").Return("/diagrams/puml/test-diagram")
+	mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram").Return(nil)
+	mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram", "@startuml\nstate A\n@enduml", time.Hour).Return(assert.AnError)
 
-	// Store
-	err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
-	require.NoError(t, err)
+	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-	// Get
-	retrieved, err := cache.GetDiagram(ctx, diagramName)
-	require.NoError(t, err)
-	assert.Equal(t, content, retrieved)
+	err := cache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
-	// Delete
-	err = cache.DeleteDiagram(ctx, diagramName)
-	require.NoError(t, err)
-
-	// Verify gone
-	_, err = cache.GetDiagram(ctx, diagramName)
 	require.Error(t, err)
-	assert.True(t, internal.IsNotFoundError(err))
+	assert.Contains(t, err.Error(), "failed to store diagram")
+
+	mockClient.AssertExpectations(t)
+	mockKeyGen.AssertExpectations(t)
 }
 
-// setupTestCache creates a test cache instance
-// Returns the cache and a cleanup function
-func setupTestCache(t *testing.T) (*RedisCache, func()) {
-	config := internal.DefaultConfig()
-	config.RedisDB = 15 // Use a different DB for tests
-	config.DefaultTTL = time.Hour
-
-	cache, err := NewRedisCache(config)
-	require.NoError(t, err)
-
-	// Test Redis connection
+func TestRedisCache_Health(t *testing.T) {
 	ctx := context.Background()
-	err = cache.Health(ctx)
-	if err != nil {
-		t.Skip("Redis not available for testing:", err)
-	}
+	mockClient := NewMockRedisClient()
+	mockKeyGen := NewMockKeyGenerator()
+	config := &internal.Config{DefaultTTL: time.Hour}
 
-	// Cleanup function
-	cleanup := func() {
-		// Clean up any test data
-		_ = cache.Cleanup(context.Background(), "/diagrams/puml/*")
-		_ = cache.Close()
-	}
+	mockClient.On("HealthWithRetry", ctx).Return(nil)
 
-	return cache, cleanup
+	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
+	err := cache.Health(ctx)
+
+	require.NoError(t, err)
+	mockClient.AssertExpectations(t)
+}
+
+func TestRedisCache_Close(t *testing.T) {
+	mockClient := NewMockRedisClient()
+	mockKeyGen := NewMockKeyGenerator()
+	config := &internal.Config{DefaultTTL: time.Hour}
+
+	mockClient.On("Close").Return(nil)
+
+	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
+
+	err := cache.Close()
+
+	require.NoError(t, err)
+	mockClient.AssertExpectations(t)
 }
