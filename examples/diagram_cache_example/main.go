@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
 
 func main() {
 	// Create Redis cache configuration
-	config := internal.DefaultConfig()
+	config := cache.DefaultRedisConfig()
 	config.RedisAddr = "localhost:6379"
 	config.DefaultTTL = 1 * time.Hour
 
@@ -124,7 +123,7 @@ P --> C : process()
 
 	// Verify deletion
 	_, err = redisCache.GetDiagram(ctx, diagramName)
-	if err != nil && internal.IsNotFoundError(err) {
+	if err != nil && cache.IsNotFoundError(err) {
 		fmt.Printf("✓ Confirmed diagram '%s' was deleted\n", diagramName)
 	} else {
 		fmt.Printf("✗ Diagram '%s' still exists or unexpected error: %v\n", diagramName, err)

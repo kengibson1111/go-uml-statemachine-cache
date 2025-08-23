@@ -8,8 +8,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
 
 func TestRedisCache_StoreDiagram(t *testing.T) {
@@ -21,7 +19,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		content     string
 		ttl         time.Duration
 		expectError bool
-		errorType   internal.ErrorType
+		errorType   CacheErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -54,7 +52,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   CacheErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -65,7 +63,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   CacheErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -88,7 +86,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := NewMockRedisClient()
 			mockKeyGen := NewMockKeyGenerator()
-			config := &internal.Config{DefaultTTL: time.Hour}
+			config := &RedisConfig{DefaultTTL: time.Hour}
 
 			tt.setupMocks(mockClient, mockKeyGen)
 
@@ -99,7 +97,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*internal.CacheError)
+					cacheErr, ok := err.(*CacheError)
 					require.True(t, ok, "expected CacheError, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
@@ -120,7 +118,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 		name        string
 		diagramName string
 		expectError bool
-		errorType   internal.ErrorType
+		errorType   CacheErrorType
 		expected    string
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
@@ -139,7 +137,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			name:        "retrieve non-existent diagram",
 			diagramName: "non-existent-diagram",
 			expectError: true,
-			errorType:   internal.ErrorTypeNotFound,
+			errorType:   CacheErrorTypeNotFound,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return("/diagrams/puml/non-existent-diagram")
 				mockKeyGen.On("ValidateKey", "/diagrams/puml/non-existent-diagram").Return(nil)
@@ -150,7 +148,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			name:        "empty diagram name",
 			diagramName: "",
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   CacheErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -161,7 +159,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := NewMockRedisClient()
 			mockKeyGen := NewMockKeyGenerator()
-			config := &internal.Config{DefaultTTL: time.Hour}
+			config := &RedisConfig{DefaultTTL: time.Hour}
 
 			tt.setupMocks(mockClient, mockKeyGen)
 
@@ -172,7 +170,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*internal.CacheError)
+					cacheErr, ok := err.(*CacheError)
 					require.True(t, ok, "expected CacheError, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
@@ -195,7 +193,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 		name        string
 		diagramName string
 		expectError bool
-		errorType   internal.ErrorType
+		errorType   CacheErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -222,7 +220,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 			name:        "empty diagram name",
 			diagramName: "",
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   CacheErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -233,7 +231,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := NewMockRedisClient()
 			mockKeyGen := NewMockKeyGenerator()
-			config := &internal.Config{DefaultTTL: time.Hour}
+			config := &RedisConfig{DefaultTTL: time.Hour}
 
 			tt.setupMocks(mockClient, mockKeyGen)
 
@@ -244,7 +242,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*internal.CacheError)
+					cacheErr, ok := err.(*CacheError)
 					require.True(t, ok, "expected CacheError, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
@@ -262,20 +260,20 @@ func TestRedisCache_KeyValidationError(t *testing.T) {
 	ctx := context.Background()
 	mockClient := NewMockRedisClient()
 	mockKeyGen := NewMockKeyGenerator()
-	config := &internal.Config{DefaultTTL: time.Hour}
+	config := &RedisConfig{DefaultTTL: time.Hour}
 
 	// Setup mock to return key validation error
 	mockKeyGen.On("DiagramKey", "test-diagram").Return("/invalid/key")
-	mockKeyGen.On("ValidateKey", "/invalid/key").Return(internal.NewKeyInvalidError("/invalid/key", "invalid key format"))
+	mockKeyGen.On("ValidateKey", "/invalid/key").Return(NewKeyInvalidError("/invalid/key", "invalid key format"))
 
 	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
 	err := cache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
 	require.Error(t, err)
-	cacheErr, ok := err.(*internal.CacheError)
+	cacheErr, ok := err.(*CacheError)
 	require.True(t, ok, "expected CacheError, got %T", err)
-	assert.Equal(t, internal.ErrorTypeKeyInvalid, cacheErr.Type)
+	assert.Equal(t, CacheErrorTypeKeyInvalid, cacheErr.Type)
 
 	mockKeyGen.AssertExpectations(t)
 }
@@ -284,7 +282,7 @@ func TestRedisCache_RedisConnectionError(t *testing.T) {
 	ctx := context.Background()
 	mockClient := NewMockRedisClient()
 	mockKeyGen := NewMockKeyGenerator()
-	config := &internal.Config{DefaultTTL: time.Hour}
+	config := &RedisConfig{DefaultTTL: time.Hour}
 
 	// Setup mocks for successful key generation but Redis connection error
 	mockKeyGen.On("DiagramKey", "test-diagram").Return("/diagrams/puml/test-diagram")
@@ -306,7 +304,7 @@ func TestRedisCache_Health(t *testing.T) {
 	ctx := context.Background()
 	mockClient := NewMockRedisClient()
 	mockKeyGen := NewMockKeyGenerator()
-	config := &internal.Config{DefaultTTL: time.Hour}
+	config := &RedisConfig{DefaultTTL: time.Hour}
 
 	mockClient.On("HealthWithRetry", ctx).Return(nil)
 
@@ -321,7 +319,7 @@ func TestRedisCache_Health(t *testing.T) {
 func TestRedisCache_Close(t *testing.T) {
 	mockClient := NewMockRedisClient()
 	mockKeyGen := NewMockKeyGenerator()
-	config := &internal.Config{DefaultTTL: time.Hour}
+	config := &RedisConfig{DefaultTTL: time.Hour}
 
 	mockClient.On("Close").Return(nil)
 

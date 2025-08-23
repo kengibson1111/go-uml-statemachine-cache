@@ -6,8 +6,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/mock"
-
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
 
 // MockRedisClient is a mock implementation of the RedisClientInterface for testing
@@ -60,9 +58,9 @@ func (m *MockRedisClient) Client() *redis.Client {
 }
 
 // Config mocks the Config method
-func (m *MockRedisClient) Config() *internal.Config {
+func (m *MockRedisClient) Config() *RedisConfig {
 	args := m.Called()
-	return args.Get(0).(*internal.Config)
+	return args.Get(0).(*RedisConfig)
 }
 
 // Close mocks the Close method

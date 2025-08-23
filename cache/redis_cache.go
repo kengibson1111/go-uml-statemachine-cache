@@ -6,21 +6,101 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
-
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
+
+// types and funcs for external use.
+type RedisConfig = internal.Config
+type RedisRetryConfig = internal.RetryConfig
+type CacheErrorType = internal.ErrorType
+type CacheError = internal.CacheError
+
+const (
+	// ErrorTypeConnection indicates a Redis connection error
+	CacheErrorTypeConnection CacheErrorType = internal.ErrorTypeConnection
+	// ErrorTypeKeyInvalid indicates an invalid cache key
+	CacheErrorTypeKeyInvalid = internal.ErrorTypeKeyInvalid
+	// ErrorTypeNotFound indicates a cache miss or key not found
+	CacheErrorTypeNotFound = internal.ErrorTypeNotFound
+	// ErrorTypeSerialization indicates JSON marshaling/unmarshaling error
+	CacheErrorTypeSerialization = internal.ErrorTypeSerialization
+	// ErrorTypeTimeout indicates a timeout during cache operation
+	CacheErrorTypeTimeout = internal.ErrorTypeTimeout
+	// ErrorTypeCapacity indicates cache capacity or memory issues
+	CacheErrorTypeCapacity = internal.ErrorTypeCapacity
+	// ErrorTypeValidation indicates input validation failure
+	CacheErrorTypeValidation = internal.ErrorTypeValidation
+)
+
+// NewCacheError creates a new CacheError
+func NewCacheError(errType CacheErrorType, key, message string, cause error) *CacheError {
+	return internal.NewCacheError(errType, key, message, cause)
+}
+
+// NewConnectionError creates a connection-specific cache error
+func NewConnectionError(message string, cause error) *CacheError {
+	return internal.NewConnectionError(message, cause)
+}
+
+// NewKeyInvalidError creates a key validation error
+func NewKeyInvalidError(key, message string) *CacheError {
+	return internal.NewKeyInvalidError(key, message)
+}
+
+// NewNotFoundError creates a not found error
+func NewNotFoundError(key string) *CacheError {
+	return internal.NewNotFoundError(key)
+}
+
+// NewSerializationError creates a serialization error
+func NewSerializationError(key, message string, cause error) *CacheError {
+	return internal.NewSerializationError(key, message, cause)
+}
+
+// NewTimeoutError creates a timeout error
+func NewTimeoutError(key, message string, cause error) *CacheError {
+	return internal.NewTimeoutError(key, message, cause)
+}
+
+// NewValidationError creates a validation error
+func NewValidationError(message string, cause error) *CacheError {
+	return internal.NewValidationError(message, cause)
+}
+
+// IsConnectionError checks if the error is a connection error
+func IsConnectionError(err error) bool {
+	return internal.IsConnectionError(err)
+}
+
+// IsNotFoundError checks if the error is a not found error
+func IsNotFoundError(err error) bool {
+	return internal.IsNotFoundError(err)
+}
+
+// IsValidationError checks if the error is a validation error
+func IsValidationError(err error) bool {
+	return internal.IsValidationError(err)
+}
+
+func DefaultRedisConfig() *RedisConfig {
+	return internal.DefaultConfig()
+}
+
+func DefaultRedisRetryConfig() *RedisRetryConfig {
+	return internal.DefaultRetryConfig()
+}
 
 // RedisCache implements the Cache interface using Redis as the backend
 type RedisCache struct {
 	client internal.RedisClientInterface
 	keyGen internal.KeyGenerator
-	config *internal.Config
+	config *RedisConfig
 }
 
 // NewRedisCache creates a new Redis-backed cache implementation
-func NewRedisCache(config *internal.Config) (*RedisCache, error) {
+func NewRedisCache(config *RedisConfig) (*RedisCache, error) {
 	client, err := internal.NewRedisClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Redis client: %w", err)
@@ -34,7 +114,7 @@ func NewRedisCache(config *internal.Config) (*RedisCache, error) {
 }
 
 // NewRedisCacheWithDependencies creates a new Redis cache with injected dependencies for testing
-func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen internal.KeyGenerator, config *internal.Config) *RedisCache {
+func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen internal.KeyGenerator, config *RedisConfig) *RedisCache {
 	return &RedisCache{
 		client: client,
 		keyGen: keyGen,
@@ -45,11 +125,11 @@ func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen 
 // StoreDiagram stores a PlantUML diagram with TTL support
 func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error {
 	if name == "" {
-		return internal.NewValidationError("diagram name cannot be empty", nil)
+		return NewValidationError("diagram name cannot be empty", nil)
 	}
 
 	if pumlContent == "" {
-		return internal.NewValidationError("diagram content cannot be empty", nil)
+		return NewValidationError("diagram content cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -57,7 +137,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Use default TTL if not specified
@@ -69,10 +149,10 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 	err := rc.client.SetWithRetry(ctx, key, pumlContent, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError(key, "timeout storing diagram", err)
+			return NewTimeoutError(key, "timeout storing diagram", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to store diagram", err)
+			return NewConnectionError("failed to store diagram", err)
 		}
 		return fmt.Errorf("failed to store diagram '%s': %w", name, err)
 	}
@@ -83,7 +163,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 // GetDiagram retrieves a PlantUML diagram with error handling
 func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, error) {
 	if name == "" {
-		return "", internal.NewValidationError("diagram name cannot be empty", nil)
+		return "", NewValidationError("diagram name cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -91,20 +171,20 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return "", internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return "", NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the diagram content from Redis
 	content, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return "", internal.NewNotFoundError(key)
+			return "", NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return "", internal.NewTimeoutError(key, "timeout retrieving diagram", err)
+			return "", NewTimeoutError(key, "timeout retrieving diagram", err)
 		}
 		if isConnectionError(err) {
-			return "", internal.NewConnectionError("failed to retrieve diagram", err)
+			return "", NewConnectionError("failed to retrieve diagram", err)
 		}
 		return "", fmt.Errorf("failed to retrieve diagram '%s': %w", name, err)
 	}
@@ -115,7 +195,7 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 // DeleteDiagram removes a diagram from the cache for cleanup
 func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 	if name == "" {
-		return internal.NewValidationError("diagram name cannot be empty", nil)
+		return NewValidationError("diagram name cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -123,17 +203,17 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Delete the diagram from Redis
 	err := rc.client.DelWithRetry(ctx, key)
 	if err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError(key, "timeout deleting diagram", err)
+			return NewTimeoutError(key, "timeout deleting diagram", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to delete diagram", err)
+			return NewConnectionError("failed to delete diagram", err)
 		}
 		return fmt.Errorf("failed to delete diagram '%s': %w", name, err)
 	}
@@ -144,15 +224,15 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 // StoreStateMachine stores a parsed state machine with TTL support
 func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error {
 	if umlVersion == "" {
-		return internal.NewValidationError("UML version cannot be empty", nil)
+		return NewValidationError("UML version cannot be empty", nil)
 	}
 
 	if name == "" {
-		return internal.NewValidationError("state machine name cannot be empty", nil)
+		return NewValidationError("state machine name cannot be empty", nil)
 	}
 
 	if machine == nil {
-		return internal.NewValidationError("state machine cannot be nil", nil)
+		return NewValidationError("state machine cannot be nil", nil)
 	}
 
 	// Generate cache key
@@ -160,13 +240,13 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Serialize the state machine to JSON
 	data, err := json.Marshal(machine)
 	if err != nil {
-		return internal.NewSerializationError(key, "failed to marshal state machine", err)
+		return NewSerializationError(key, "failed to marshal state machine", err)
 	}
 
 	// Use default TTL if not specified
@@ -178,10 +258,10 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	err = rc.client.SetWithRetry(ctx, key, data, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError(key, "timeout storing state machine", err)
+			return NewTimeoutError(key, "timeout storing state machine", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to store state machine", err)
+			return NewConnectionError("failed to store state machine", err)
 		}
 		return fmt.Errorf("failed to store state machine '%s': %w", name, err)
 	}
@@ -192,11 +272,11 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 // GetStateMachine retrieves a parsed state machine
 func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name string) (*models.StateMachine, error) {
 	if umlVersion == "" {
-		return nil, internal.NewValidationError("UML version cannot be empty", nil)
+		return nil, NewValidationError("UML version cannot be empty", nil)
 	}
 
 	if name == "" {
-		return nil, internal.NewValidationError("state machine name cannot be empty", nil)
+		return nil, NewValidationError("state machine name cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -204,20 +284,20 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return nil, internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return nil, NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the serialized state machine from Redis
 	data, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, internal.NewNotFoundError(key)
+			return nil, NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return nil, internal.NewTimeoutError(key, "timeout retrieving state machine", err)
+			return nil, NewTimeoutError(key, "timeout retrieving state machine", err)
 		}
 		if isConnectionError(err) {
-			return nil, internal.NewConnectionError("failed to retrieve state machine", err)
+			return nil, NewConnectionError("failed to retrieve state machine", err)
 		}
 		return nil, fmt.Errorf("failed to retrieve state machine '%s': %w", name, err)
 	}
@@ -226,7 +306,7 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 	var machine models.StateMachine
 	err = json.Unmarshal([]byte(data), &machine)
 	if err != nil {
-		return nil, internal.NewSerializationError(key, "failed to unmarshal state machine", err)
+		return nil, NewSerializationError(key, "failed to unmarshal state machine", err)
 	}
 
 	return &machine, nil
@@ -235,11 +315,11 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 // DeleteStateMachine removes a state machine from the cache
 func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name string) error {
 	if umlVersion == "" {
-		return internal.NewValidationError("UML version cannot be empty", nil)
+		return NewValidationError("UML version cannot be empty", nil)
 	}
 
 	if name == "" {
-		return internal.NewValidationError("state machine name cannot be empty", nil)
+		return NewValidationError("state machine name cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -247,17 +327,17 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Delete the state machine from Redis
 	err := rc.client.DelWithRetry(ctx, key)
 	if err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError(key, "timeout deleting state machine", err)
+			return NewTimeoutError(key, "timeout deleting state machine", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to delete state machine", err)
+			return NewConnectionError("failed to delete state machine", err)
 		}
 		return fmt.Errorf("failed to delete state machine '%s': %w", name, err)
 	}
@@ -268,19 +348,19 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 // StoreEntity stores a state machine entity with TTL support
 func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, entityID string, entity interface{}, ttl time.Duration) error {
 	if umlVersion == "" {
-		return internal.NewValidationError("UML version cannot be empty", nil)
+		return NewValidationError("UML version cannot be empty", nil)
 	}
 
 	if diagramName == "" {
-		return internal.NewValidationError("diagram name cannot be empty", nil)
+		return NewValidationError("diagram name cannot be empty", nil)
 	}
 
 	if entityID == "" {
-		return internal.NewValidationError("entity ID cannot be empty", nil)
+		return NewValidationError("entity ID cannot be empty", nil)
 	}
 
 	if entity == nil {
-		return internal.NewValidationError("entity cannot be nil", nil)
+		return NewValidationError("entity cannot be nil", nil)
 	}
 
 	// Generate cache key
@@ -288,13 +368,13 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Serialize the entity to JSON
 	data, err := json.Marshal(entity)
 	if err != nil {
-		return internal.NewSerializationError(key, "failed to marshal entity", err)
+		return NewSerializationError(key, "failed to marshal entity", err)
 	}
 
 	// Use default TTL if not specified
@@ -306,10 +386,10 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 	err = rc.client.SetWithRetry(ctx, key, data, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError(key, "timeout storing entity", err)
+			return NewTimeoutError(key, "timeout storing entity", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to store entity", err)
+			return NewConnectionError("failed to store entity", err)
 		}
 		return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
 	}
@@ -320,15 +400,15 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 // GetEntity retrieves a state machine entity
 func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, entityID string) (interface{}, error) {
 	if umlVersion == "" {
-		return nil, internal.NewValidationError("UML version cannot be empty", nil)
+		return nil, NewValidationError("UML version cannot be empty", nil)
 	}
 
 	if diagramName == "" {
-		return nil, internal.NewValidationError("diagram name cannot be empty", nil)
+		return nil, NewValidationError("diagram name cannot be empty", nil)
 	}
 
 	if entityID == "" {
-		return nil, internal.NewValidationError("entity ID cannot be empty", nil)
+		return nil, NewValidationError("entity ID cannot be empty", nil)
 	}
 
 	// Generate cache key
@@ -336,20 +416,20 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return nil, internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return nil, NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the serialized entity from Redis
 	data, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, internal.NewNotFoundError(key)
+			return nil, NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return nil, internal.NewTimeoutError(key, "timeout retrieving entity", err)
+			return nil, NewTimeoutError(key, "timeout retrieving entity", err)
 		}
 		if isConnectionError(err) {
-			return nil, internal.NewConnectionError("failed to retrieve entity", err)
+			return nil, NewConnectionError("failed to retrieve entity", err)
 		}
 		return nil, fmt.Errorf("failed to retrieve entity '%s': %w", entityID, err)
 	}
@@ -358,7 +438,7 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 	var entity interface{}
 	err = json.Unmarshal([]byte(data), &entity)
 	if err != nil {
-		return nil, internal.NewSerializationError(key, "failed to unmarshal entity", err)
+		return nil, NewSerializationError(key, "failed to unmarshal entity", err)
 	}
 
 	return entity, nil
@@ -367,7 +447,7 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 // Cleanup removes cache entries matching a pattern
 func (rc *RedisCache) Cleanup(ctx context.Context, pattern string) error {
 	if pattern == "" {
-		return internal.NewValidationError("cleanup pattern cannot be empty", nil)
+		return NewValidationError("cleanup pattern cannot be empty", nil)
 	}
 
 	// Use Redis SCAN to find keys matching the pattern
@@ -381,10 +461,10 @@ func (rc *RedisCache) Cleanup(ctx context.Context, pattern string) error {
 
 	if err := iter.Err(); err != nil {
 		if isTimeoutError(err) {
-			return internal.NewTimeoutError("", "timeout during cleanup scan", err)
+			return NewTimeoutError("", "timeout during cleanup scan", err)
 		}
 		if isConnectionError(err) {
-			return internal.NewConnectionError("failed to scan for cleanup", err)
+			return NewConnectionError("failed to scan for cleanup", err)
 		}
 		return fmt.Errorf("failed to scan keys for cleanup: %w", err)
 	}
@@ -394,10 +474,10 @@ func (rc *RedisCache) Cleanup(ctx context.Context, pattern string) error {
 		err := rc.client.DelWithRetry(ctx, keysToDelete...)
 		if err != nil {
 			if isTimeoutError(err) {
-				return internal.NewTimeoutError("", "timeout during cleanup deletion", err)
+				return NewTimeoutError("", "timeout during cleanup deletion", err)
 			}
 			if isConnectionError(err) {
-				return internal.NewConnectionError("failed to delete keys during cleanup", err)
+				return NewConnectionError("failed to delete keys during cleanup", err)
 			}
 			return fmt.Errorf("failed to delete keys during cleanup: %w", err)
 		}

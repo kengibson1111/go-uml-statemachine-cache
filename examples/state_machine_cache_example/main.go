@@ -10,12 +10,11 @@ import (
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 )
 
 func main() {
 	// Create cache configuration
-	config := &internal.Config{
+	config := &cache.RedisConfig{
 		RedisAddr:    "localhost:6379",
 		RedisDB:      0,
 		MaxRetries:   3,

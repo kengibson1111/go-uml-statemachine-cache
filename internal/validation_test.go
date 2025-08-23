@@ -1,10 +1,9 @@
-package cache
+package internal
 
 import (
 	"testing"
 	"time"
 
-	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,28 +11,28 @@ import (
 // TestDiagramValidation tests the validation logic without requiring Redis
 func TestDiagramValidation(t *testing.T) {
 	// Test validation directly without creating a full cache instance
-	keyGen := internal.NewKeyGenerator()
+	keyGen := NewKeyGenerator()
 
 	tests := []struct {
 		name        string
 		diagramName string
 		content     string
 		expectError bool
-		errorType   internal.ErrorType
+		errorType   ErrorType
 	}{
 		{
 			name:        "empty diagram name",
 			diagramName: "",
 			content:     "@startuml\nstate A\n@enduml",
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "empty content",
 			diagramName: "test-diagram",
 			content:     "",
 			expectError: true,
-			errorType:   internal.ErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "valid inputs should pass validation",
@@ -47,15 +46,15 @@ func TestDiagramValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test validation logic directly
 			if tt.diagramName == "" {
-				err := internal.NewValidationError("diagram name cannot be empty", nil)
+				err := NewValidationError("diagram name cannot be empty", nil)
 				require.Error(t, err)
-				assert.Equal(t, internal.ErrorTypeValidation, err.Type)
+				assert.Equal(t, ErrorTypeValidation, err.Type)
 			}
 
 			if tt.content == "" && tt.diagramName != "" {
-				err := internal.NewValidationError("diagram content cannot be empty", nil)
+				err := NewValidationError("diagram content cannot be empty", nil)
 				require.Error(t, err)
-				assert.Equal(t, internal.ErrorTypeValidation, err.Type)
+				assert.Equal(t, ErrorTypeValidation, err.Type)
 			}
 
 			// Test key generation and validation for valid inputs
@@ -70,7 +69,7 @@ func TestDiagramValidation(t *testing.T) {
 
 // TestKeyGeneration tests that keys are generated correctly
 func TestKeyGeneration(t *testing.T) {
-	keyGen := internal.NewKeyGenerator()
+	keyGen := NewKeyGenerator()
 
 	tests := []struct {
 		name        string
@@ -108,7 +107,7 @@ func TestKeyGeneration(t *testing.T) {
 
 // TestTTLHandling tests TTL parameter handling logic
 func TestTTLHandling(t *testing.T) {
-	config := internal.DefaultConfig()
+	config := DefaultConfig()
 	config.DefaultTTL = 24 * time.Hour
 
 	// Test that default TTL is properly configured
