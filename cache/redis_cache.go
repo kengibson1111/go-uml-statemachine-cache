@@ -18,6 +18,11 @@ type RedisConfig = internal.Config
 type RedisRetryConfig = internal.RetryConfig
 type CacheErrorType = internal.ErrorType
 type CacheError = internal.CacheError
+type ErrorContext = internal.ErrorContext
+type ErrorSeverity = internal.ErrorSeverity
+type RecoveryStrategy = internal.RecoveryStrategy
+type CircuitBreakerConfig = internal.CircuitBreakerConfig
+type ErrorRecoveryManager = internal.ErrorRecoveryManager
 
 const (
 	// ErrorTypeConnection indicates a Redis connection error
@@ -34,6 +39,24 @@ const (
 	CacheErrorTypeCapacity = internal.ErrorTypeCapacity
 	// ErrorTypeValidation indicates input validation failure
 	CacheErrorTypeValidation = internal.ErrorTypeValidation
+	// ErrorTypeRetryExhausted indicates all retry attempts have been exhausted
+	CacheErrorTypeRetryExhausted = internal.ErrorTypeRetryExhausted
+	// ErrorTypeCircuitOpen indicates circuit breaker is open
+	CacheErrorTypeCircuitOpen = internal.ErrorTypeCircuitOpen
+
+	// Error severity levels
+	SeverityLow      ErrorSeverity = internal.SeverityLow
+	SeverityMedium   ErrorSeverity = internal.SeverityMedium
+	SeverityHigh     ErrorSeverity = internal.SeverityHigh
+	SeverityCritical ErrorSeverity = internal.SeverityCritical
+
+	// Recovery strategies
+	RecoveryStrategyFail             RecoveryStrategy = internal.RecoveryStrategyFail
+	RecoveryStrategyIgnore           RecoveryStrategy = internal.RecoveryStrategyIgnore
+	RecoveryStrategyRetryWithBackoff RecoveryStrategy = internal.RecoveryStrategyRetryWithBackoff
+	RecoveryStrategyRetryWithDelay   RecoveryStrategy = internal.RecoveryStrategyRetryWithDelay
+	RecoveryStrategyCircuitBreaker   RecoveryStrategy = internal.RecoveryStrategyCircuitBreaker
+	RecoveryStrategyWaitAndRetry     RecoveryStrategy = internal.RecoveryStrategyWaitAndRetry
 )
 
 // NewCacheError creates a new CacheError
@@ -84,6 +107,56 @@ func IsNotFoundError(err error) bool {
 // IsValidationError checks if the error is a validation error
 func IsValidationError(err error) bool {
 	return internal.IsValidationError(err)
+}
+
+// IsRetryExhaustedError checks if the error is a retry exhausted error
+func IsRetryExhaustedError(err error) bool {
+	return internal.IsRetryExhaustedError(err)
+}
+
+// IsCircuitOpenError checks if the error is a circuit open error
+func IsCircuitOpenError(err error) bool {
+	return internal.IsCircuitOpenError(err)
+}
+
+// IsRetryableError checks if the error should trigger retry logic
+func IsRetryableError(err error) bool {
+	return internal.IsRetryableError(err)
+}
+
+// GetErrorSeverity returns the severity level of an error
+func GetErrorSeverity(err error) ErrorSeverity {
+	return internal.GetErrorSeverity(err)
+}
+
+// GetRecoveryStrategy returns the recommended recovery strategy for an error
+func GetRecoveryStrategy(err error) RecoveryStrategy {
+	return internal.GetRecoveryStrategy(err)
+}
+
+// NewCacheErrorWithContext creates a new CacheError with detailed context
+func NewCacheErrorWithContext(errType CacheErrorType, key, message string, cause error, context *ErrorContext) *CacheError {
+	return internal.NewCacheErrorWithContext(errType, key, message, cause, context)
+}
+
+// NewRetryExhaustedError creates a retry exhausted error
+func NewRetryExhaustedError(operation string, attempts int, lastError error) *CacheError {
+	return internal.NewRetryExhaustedError(operation, attempts, lastError)
+}
+
+// NewCircuitOpenError creates a circuit breaker open error
+func NewCircuitOpenError(operation string) *CacheError {
+	return internal.NewCircuitOpenError(operation)
+}
+
+// DefaultCircuitBreakerConfig returns default circuit breaker configuration
+func DefaultCircuitBreakerConfig() *CircuitBreakerConfig {
+	return internal.DefaultCircuitBreakerConfig()
+}
+
+// NewErrorRecoveryManager creates a new error recovery manager
+func NewErrorRecoveryManager(config *CircuitBreakerConfig) *ErrorRecoveryManager {
+	return internal.NewErrorRecoveryManager(config)
 }
 
 func DefaultRedisConfig() *RedisConfig {
