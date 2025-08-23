@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func NewInputValidator() *InputValidator {
 		maxStringLength:     10000, // 10KB max for string inputs
 		maxKeyLength:        250,   // Redis key length limit
 		allowedCharPattern:  regexp.MustCompile(`^[\w\-_/.%\s]+$`),
-		sqlInjectionPattern: regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|create|alter|exec|execute|script|javascript|vbscript|onload|onerror|onclick)`),
+		sqlInjectionPattern: regexp.MustCompile(`(?i)\b(union\s+select|insert\s+into|update\s+set|delete\s+from|drop\s+table|create\s+table|alter\s+table|exec\s*\(|execute\s*\(|script\s*>|javascript\s*:|vbscript\s*:)\b`),
 		xssPattern:          regexp.MustCompile(`(?i)(<script|javascript:|vbscript:|onload=|onerror=|onclick=|<iframe|<object|<embed)`),
 	}
 }
@@ -339,6 +340,12 @@ func (v *InputValidator) sanitizeContent(content string) string {
 // ValidateEntityData validates entity data before storage
 func (v *InputValidator) ValidateEntityData(entity interface{}, fieldName string) error {
 	if entity == nil {
+		return NewValidationError(fmt.Sprintf("%s cannot be nil", fieldName), nil)
+	}
+
+	// Check for nil pointers using reflection
+	// This handles cases where a nil pointer of a specific type is passed as interface{}
+	if reflect.ValueOf(entity).Kind() == reflect.Ptr && reflect.ValueOf(entity).IsNil() {
 		return NewValidationError(fmt.Sprintf("%s cannot be nil", fieldName), nil)
 	}
 

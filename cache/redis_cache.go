@@ -717,6 +717,9 @@ func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVe
 	}
 
 	if operation == "add" {
+		if entityKey == "" {
+			return NewValidationError("entity key cannot be empty for add operation", nil)
+		}
 		sanitizedEntityKey, err := rc.validator.ValidateAndSanitizeString(entityKey, "entity key")
 		if err != nil {
 			return err
