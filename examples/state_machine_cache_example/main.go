@@ -43,12 +43,32 @@ func main() {
 
 	fmt.Println("=== State Machine Cache Example ===")
 
+	// First, create and store the corresponding diagram (required for referential integrity)
+	diagramContent := `@startuml
+title Order Processing State Machine
+
+[*] --> Pending
+Pending --> Processing : ProcessOrder
+Processing --> Completed : Complete
+Processing --> Cancelled : Cancel
+Completed --> [*]
+Cancelled --> [*]
+
+@enduml`
+
+	machineName := "OrderProcessing"
+	fmt.Printf("Storing diagram '%s' (required for state machine)...\n", machineName)
+	err = redisCache.StoreDiagram(ctx, machineName, diagramContent, 2*time.Hour)
+	if err != nil {
+		log.Fatalf("Failed to store diagram: %v", err)
+	}
+	fmt.Println("✓ Diagram stored successfully")
+
 	// Create a sample state machine
 	stateMachine := createSampleStateMachine()
 
 	// Store the state machine
 	umlVersion := "2.5.1"
-	machineName := "OrderProcessing"
 	ttl := 2 * time.Hour
 
 	fmt.Printf("Storing state machine '%s' (version %s)...\n", machineName, umlVersion)
@@ -115,7 +135,7 @@ func main() {
 	}
 	fmt.Printf("  ✓ Version %s exists\n", newVersion)
 
-	// Clean up - delete the state machines
+	// Clean up - delete the state machines and diagram
 	fmt.Printf("\nCleaning up...\n")
 	err = redisCache.DeleteStateMachine(ctx, umlVersion, machineName)
 	if err != nil {
@@ -129,6 +149,14 @@ func main() {
 		log.Printf("Warning: Failed to delete state machine (v%s): %v", newVersion, err)
 	} else {
 		fmt.Printf("  ✓ Deleted version %s\n", newVersion)
+	}
+
+	// Clean up the diagram
+	err = redisCache.DeleteDiagram(ctx, machineName)
+	if err != nil {
+		log.Printf("Warning: Failed to delete diagram '%s': %v", machineName, err)
+	} else {
+		fmt.Printf("  ✓ Deleted diagram '%s'\n", machineName)
 	}
 
 	fmt.Println("\n=== Example completed successfully ===")
