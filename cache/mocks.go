@@ -69,6 +69,69 @@ func (m *MockRedisClient) Close() error {
 	return args.Error(0)
 }
 
+// Additional methods needed for enhanced cleanup functionality
+
+// DBSize mocks the DBSize method
+func (m *MockRedisClient) DBSize(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// Info mocks the Info method
+func (m *MockRedisClient) Info(ctx context.Context, section string) (string, error) {
+	args := m.Called(ctx, section)
+	return args.String(0), args.Error(1)
+}
+
+// Scan mocks the Scan method
+func (m *MockRedisClient) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	args := m.Called(ctx, cursor, match, count)
+	return args.Get(0).([]string), args.Get(1).(uint64), args.Error(2)
+}
+
+// MemoryUsage mocks the MemoryUsage method
+func (m *MockRedisClient) MemoryUsage(ctx context.Context, key string) (int64, error) {
+	args := m.Called(ctx, key)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// ScanWithRetry mocks the ScanWithRetry method
+func (m *MockRedisClient) ScanWithRetry(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	args := m.Called(ctx, cursor, match, count)
+	return args.Get(0).([]string), args.Get(1).(uint64), args.Error(2)
+}
+
+// DelBatchWithRetry mocks the DelBatchWithRetry method
+func (m *MockRedisClient) DelBatchWithRetry(ctx context.Context, keys ...string) (int64, error) {
+	args := m.Called(ctx, keys)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// DBSizeWithRetry mocks the DBSizeWithRetry method
+func (m *MockRedisClient) DBSizeWithRetry(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// InfoWithRetry mocks the InfoWithRetry method
+func (m *MockRedisClient) InfoWithRetry(ctx context.Context, section string) (string, error) {
+	args := m.Called(ctx, section)
+	return args.String(0), args.Error(1)
+}
+
+// MemoryUsageWithRetry mocks the MemoryUsageWithRetry method
+func (m *MockRedisClient) MemoryUsageWithRetry(ctx context.Context, key string) (int64, error) {
+	args := m.Called(ctx, key)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// Legacy methods for backward compatibility
+// Del mocks the Del method
+func (m *MockRedisClient) Del(ctx context.Context, keys ...string) (int64, error) {
+	args := m.Called(ctx, keys)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // MockKeyGenerator is a mock implementation of the KeyGenerator for testing
 type MockKeyGenerator struct {
 	mock.Mock

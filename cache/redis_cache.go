@@ -270,8 +270,24 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 		}
 	}
 
+	// Sort entity IDs to ensure deterministic processing order
+	var entityIDs []string
+	for entityID := range entities {
+		entityIDs = append(entityIDs, entityID)
+	}
+
+	// Sort to ensure consistent order
+	for i := 0; i < len(entityIDs); i++ {
+		for j := i + 1; j < len(entityIDs); j++ {
+			if entityIDs[i] > entityIDs[j] {
+				entityIDs[i], entityIDs[j] = entityIDs[j], entityIDs[i]
+			}
+		}
+	}
+
 	// Store each entity and populate the Entities map with cache paths
-	for entityID, entity := range entities {
+	for _, entityID := range entityIDs {
+		entity := entities[entityID]
 		entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
 
 		// Validate entity key before storing
@@ -793,46 +809,326 @@ func (rc *RedisCache) GetEntityAsVertex(ctx context.Context, umlVersion, diagram
 	return &vertex, nil
 }
 
-// Cleanup removes cache entries matching a pattern
+// DefaultCleanupOptions returns sensible default cleanup options
+func DefaultCleanupOptions() *CleanupOptions {
+	return &CleanupOptions{
+		BatchSize:      100,
+		ScanCount:      100,
+		MaxKeys:        0, // No limit
+		DryRun:         false,
+		Timeout:        5 * time.Minute,
+		CollectMetrics: true,
+	}
+}
+
+// Cleanup removes cache entries matching a pattern with enhanced functionality
 func (rc *RedisCache) Cleanup(ctx context.Context, pattern string) error {
+	result, err := rc.CleanupWithOptions(ctx, pattern, DefaultCleanupOptions())
+	if err != nil {
+		return err
+	}
+
+	// For backward compatibility, we don't return the result in the basic Cleanup method
+	_ = result
+	return nil
+}
+
+// CleanupWithOptions removes cache entries matching a pattern with configurable options
+func (rc *RedisCache) CleanupWithOptions(ctx context.Context, pattern string, options *CleanupOptions) (*CleanupResult, error) {
 	if pattern == "" {
-		return NewValidationError("cleanup pattern cannot be empty", nil)
+		return nil, NewValidationError("cleanup pattern cannot be empty", nil)
+	}
+
+	if options == nil {
+		options = DefaultCleanupOptions()
+	}
+
+	// Validate options
+	if err := rc.validateCleanupOptions(options); err != nil {
+		return nil, NewValidationError(fmt.Sprintf("invalid cleanup options: %v", err), err)
+	}
+
+	startTime := time.Now()
+	result := &CleanupResult{}
+
+	// Create a timeout context if specified
+	cleanupCtx := ctx
+	if options.Timeout > 0 {
+		var cancel context.CancelFunc
+		cleanupCtx, cancel = context.WithTimeout(ctx, options.Timeout)
+		defer cancel()
 	}
 
 	// Use Redis SCAN to find keys matching the pattern
-	client := rc.client.Client()
-	iter := client.Scan(ctx, 0, pattern, 0).Iterator()
+	cursor := uint64(0)
+	var allKeys []string
+	var totalBytesScanned int64
 
-	var keysToDelete []string
-	for iter.Next(ctx) {
-		keysToDelete = append(keysToDelete, iter.Val())
-	}
-
-	if err := iter.Err(); err != nil {
-		if isTimeoutError(err) {
-			return NewTimeoutError("", "timeout during cleanup scan", err)
+	// Scan for keys in batches
+	for {
+		// Check for context cancellation
+		select {
+		case <-cleanupCtx.Done():
+			return nil, NewTimeoutError("", "cleanup operation timed out during scan", cleanupCtx.Err())
+		default:
 		}
-		if isConnectionError(err) {
-			return NewConnectionError("failed to scan for cleanup", err)
-		}
-		return fmt.Errorf("failed to scan keys for cleanup: %w", err)
-	}
 
-	// Delete found keys in batches
-	if len(keysToDelete) > 0 {
-		err := rc.client.DelWithRetry(ctx, keysToDelete...)
+		keys, nextCursor, err := rc.client.ScanWithRetry(cleanupCtx, cursor, pattern, options.ScanCount)
 		if err != nil {
+			result.ErrorsOccurred++
 			if isTimeoutError(err) {
-				return NewTimeoutError("", "timeout during cleanup deletion", err)
+				return result, NewTimeoutError("", "timeout during cleanup scan", err)
 			}
 			if isConnectionError(err) {
-				return NewConnectionError("failed to delete keys during cleanup", err)
+				return result, NewConnectionError("failed to scan for cleanup", err)
 			}
-			return fmt.Errorf("failed to delete keys during cleanup: %w", err)
+			return result, fmt.Errorf("failed to scan keys for cleanup: %w", err)
+		}
+
+		// Check if we need to limit the keys before processing
+		keysToProcess := keys
+		if options.MaxKeys > 0 {
+			remainingSlots := options.MaxKeys - int64(len(allKeys))
+			if remainingSlots <= 0 {
+				break // We've already reached the limit
+			}
+			if int64(len(keys)) > remainingSlots {
+				keysToProcess = keys[:remainingSlots]
+			}
+		}
+
+		result.KeysScanned += int64(len(keysToProcess))
+		allKeys = append(allKeys, keysToProcess...)
+
+		// If collecting metrics, estimate bytes scanned
+		if options.CollectMetrics {
+			for _, key := range keysToProcess {
+				totalBytesScanned += int64(len(key)) + 8 // Estimate key overhead
+			}
+		}
+
+		// Check if we've hit the max keys limit
+		if options.MaxKeys > 0 && int64(len(allKeys)) >= options.MaxKeys {
+			break
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break // Scan complete
 		}
 	}
 
+	// If dry run, just return scan results
+	if options.DryRun {
+		result.Duration = time.Since(startTime)
+		result.KeysDeleted = 0
+		result.BytesFreed = totalBytesScanned // Estimate what would be freed
+		return result, nil
+	}
+
+	// Delete keys in batches for efficiency
+	if len(allKeys) > 0 {
+		deletedCount, bytesFreed, batchCount, err := rc.deleteKeysInBatches(cleanupCtx, allKeys, options)
+		result.KeysDeleted = deletedCount
+		result.BytesFreed = bytesFreed
+		result.BatchesUsed = batchCount
+
+		if err != nil {
+			result.ErrorsOccurred++
+			result.Duration = time.Since(startTime)
+			return result, err
+		}
+	}
+
+	result.Duration = time.Since(startTime)
+	return result, nil
+}
+
+// validateCleanupOptions validates cleanup options
+func (rc *RedisCache) validateCleanupOptions(options *CleanupOptions) error {
+	if options.BatchSize <= 0 {
+		return fmt.Errorf("batch size must be positive, got %d", options.BatchSize)
+	}
+	if options.BatchSize > 1000 {
+		return fmt.Errorf("batch size too large (max 1000), got %d", options.BatchSize)
+	}
+	if options.ScanCount <= 0 {
+		return fmt.Errorf("scan count must be positive, got %d", options.ScanCount)
+	}
+	if options.MaxKeys < 0 {
+		return fmt.Errorf("max keys cannot be negative, got %d", options.MaxKeys)
+	}
+	if options.Timeout < 0 {
+		return fmt.Errorf("timeout cannot be negative, got %v", options.Timeout)
+	}
 	return nil
+}
+
+// deleteKeysInBatches deletes keys in batches and returns metrics
+func (rc *RedisCache) deleteKeysInBatches(ctx context.Context, keys []string, options *CleanupOptions) (int64, int64, int, error) {
+	var totalDeleted int64
+	var totalBytesFreed int64
+	batchCount := 0
+
+	// Process keys in batches
+	for i := 0; i < len(keys); i += options.BatchSize {
+		// Check for context cancellation
+		select {
+		case <-ctx.Done():
+			return totalDeleted, totalBytesFreed, batchCount, NewTimeoutError("", "cleanup operation timed out during deletion", ctx.Err())
+		default:
+		}
+
+		end := i + options.BatchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		batch := keys[i:end]
+		batchCount++
+
+		// If collecting metrics, get key sizes before deletion
+		var batchBytesFreed int64
+		if options.CollectMetrics {
+			for _, key := range batch {
+				// Estimate memory usage: key name + value + overhead
+				if size, err := rc.client.MemoryUsageWithRetry(ctx, key); err == nil {
+					batchBytesFreed += size
+				} else {
+					// Fallback estimation if MEMORY USAGE fails
+					batchBytesFreed += int64(len(key)) + 100 // Rough estimate
+				}
+			}
+		}
+
+		// Delete the batch
+		deletedInBatch, err := rc.client.DelBatchWithRetry(ctx, batch...)
+		if err != nil {
+			if isTimeoutError(err) {
+				return totalDeleted, totalBytesFreed, batchCount, NewTimeoutError("", "timeout during batch deletion", err)
+			}
+			if isConnectionError(err) {
+				return totalDeleted, totalBytesFreed, batchCount, NewConnectionError("failed to delete batch during cleanup", err)
+			}
+			return totalDeleted, totalBytesFreed, batchCount, fmt.Errorf("failed to delete batch during cleanup: %w", err)
+		}
+
+		totalDeleted += deletedInBatch
+		if options.CollectMetrics {
+			// Only count bytes for actually deleted keys
+			totalBytesFreed += (batchBytesFreed * deletedInBatch) / int64(len(batch))
+		}
+	}
+
+	return totalDeleted, totalBytesFreed, batchCount, nil
+}
+
+// GetCacheSize returns information about cache size and memory usage
+func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) {
+	info := &CacheSizeInfo{}
+
+	// Get database size (number of keys)
+	dbSize, err := rc.client.DBSizeWithRetry(ctx)
+	if err != nil {
+		if isTimeoutError(err) {
+			return nil, NewTimeoutError("", "timeout getting database size", err)
+		}
+		if isConnectionError(err) {
+			return nil, NewConnectionError("failed to get database size", err)
+		}
+		return nil, fmt.Errorf("failed to get database size: %w", err)
+	}
+	info.TotalKeys = dbSize
+
+	// Get memory usage information
+	memInfo, err := rc.client.InfoWithRetry(ctx, "memory")
+	if err != nil {
+		if isTimeoutError(err) {
+			return nil, NewTimeoutError("", "timeout getting memory info", err)
+		}
+		if isConnectionError(err) {
+			return nil, NewConnectionError("failed to get memory info", err)
+		}
+		return nil, fmt.Errorf("failed to get memory info: %w", err)
+	}
+
+	// Parse memory information
+	info.MemoryUsed = rc.parseMemoryInfo(memInfo, "used_memory:")
+	info.MemoryPeak = rc.parseMemoryInfo(memInfo, "used_memory_peak:")
+	info.MemoryOverhead = rc.parseMemoryInfo(memInfo, "used_memory_overhead:")
+
+	// Get cache-specific statistics by scanning for our key patterns
+	info.DiagramCount = rc.countKeysByPattern(ctx, "/diagrams/puml/*")
+	info.StateMachineCount = rc.countKeysByPattern(ctx, "/machines/*")
+	info.EntityCount = rc.countKeysByPattern(ctx, "/machines/*/entities/*")
+
+	return info, nil
+}
+
+// parseMemoryInfo extracts memory values from Redis INFO output
+func (rc *RedisCache) parseMemoryInfo(info, key string) int64 {
+	lines := splitString(info, "\r\n")
+	for _, line := range lines {
+		if len(line) > len(key) && line[:len(key)] == key {
+			valueStr := line[len(key):]
+			// Parse the numeric value
+			var value int64
+			for _, char := range valueStr {
+				if char >= '0' && char <= '9' {
+					value = value*10 + int64(char-'0')
+				} else {
+					break
+				}
+			}
+			return value
+		}
+	}
+	return 0
+}
+
+// countKeysByPattern counts keys matching a specific pattern
+func (rc *RedisCache) countKeysByPattern(ctx context.Context, pattern string) int64 {
+	var count int64
+	cursor := uint64(0)
+
+	for {
+		keys, nextCursor, err := rc.client.ScanWithRetry(ctx, cursor, pattern, 100)
+		if err != nil {
+			return count // Return partial count on error
+		}
+
+		count += int64(len(keys))
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return count
+}
+
+// splitString splits a string by delimiter (simple implementation)
+func splitString(s, delimiter string) []string {
+	if s == "" {
+		return []string{}
+	}
+
+	var result []string
+	start := 0
+	delimLen := len(delimiter)
+
+	for i := 0; i <= len(s)-delimLen; i++ {
+		if s[i:i+delimLen] == delimiter {
+			result = append(result, s[start:i])
+			start = i + delimLen
+			i += delimLen - 1 // Skip the delimiter
+		}
+	}
+
+	// Add the last part (even if it's empty)
+	result = append(result, s[start:])
+
+	return result
 }
 
 // Health performs a health check on the cache

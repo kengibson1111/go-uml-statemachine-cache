@@ -67,6 +67,14 @@ func (m *MockCache) Cleanup(ctx context.Context, pattern string) error {
 	return nil
 }
 
+func (m *MockCache) CleanupWithOptions(ctx context.Context, pattern string, options *CleanupOptions) (*CleanupResult, error) {
+	return &CleanupResult{}, nil
+}
+
+func (m *MockCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) {
+	return &CacheSizeInfo{}, nil
+}
+
 func (m *MockCache) Health(ctx context.Context) error {
 	return nil
 }

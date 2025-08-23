@@ -76,6 +76,14 @@ type RedisClientInterface interface {
 	SetWithRetry(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 	GetWithRetry(ctx context.Context, key string) (string, error)
 	DelWithRetry(ctx context.Context, keys ...string) error
+
+	// Enhanced cleanup and monitoring methods
+	ScanWithRetry(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)
+	DelBatchWithRetry(ctx context.Context, keys ...string) (int64, error)
+	DBSizeWithRetry(ctx context.Context) (int64, error)
+	InfoWithRetry(ctx context.Context, section string) (string, error)
+	MemoryUsageWithRetry(ctx context.Context, key string) (int64, error)
+
 	Client() *redis.Client
 	Config() *Config
 	Close() error
@@ -444,4 +452,76 @@ func (rc *RedisClient) ExpireWithRetry(ctx context.Context, key string, expirati
 	return rc.executeWithRetry(ctx, "expire", func() error {
 		return rc.client.Expire(ctx, key, expiration).Err()
 	})
+}
+
+// ScanWithRetry performs a SCAN operation with retry logic
+func (rc *RedisClient) ScanWithRetry(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	var keys []string
+	var nextCursor uint64
+	err := rc.executeWithRetry(ctx, "scan", func() error {
+		scanKeys, scanCursor, err := rc.client.Scan(ctx, cursor, match, count).Result()
+		if err != nil {
+			return err
+		}
+		keys = scanKeys
+		nextCursor = scanCursor
+		return nil
+	})
+	return keys, nextCursor, err
+}
+
+// DelBatchWithRetry performs a batch DEL operation with retry logic and returns count
+func (rc *RedisClient) DelBatchWithRetry(ctx context.Context, keys ...string) (int64, error) {
+	var result int64
+	err := rc.executeWithRetry(ctx, "del", func() error {
+		count, err := rc.client.Del(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
+		result = count
+		return nil
+	})
+	return result, err
+}
+
+// DBSizeWithRetry performs a DBSIZE operation with retry logic
+func (rc *RedisClient) DBSizeWithRetry(ctx context.Context) (int64, error) {
+	var result int64
+	err := rc.executeWithRetry(ctx, "dbsize", func() error {
+		size, err := rc.client.DBSize(ctx).Result()
+		if err != nil {
+			return err
+		}
+		result = size
+		return nil
+	})
+	return result, err
+}
+
+// InfoWithRetry performs an INFO operation with retry logic
+func (rc *RedisClient) InfoWithRetry(ctx context.Context, section string) (string, error) {
+	var result string
+	err := rc.executeWithRetry(ctx, "info", func() error {
+		info, err := rc.client.Info(ctx, section).Result()
+		if err != nil {
+			return err
+		}
+		result = info
+		return nil
+	})
+	return result, err
+}
+
+// MemoryUsageWithRetry performs a MEMORY USAGE operation with retry logic
+func (rc *RedisClient) MemoryUsageWithRetry(ctx context.Context, key string) (int64, error) {
+	var result int64
+	err := rc.executeWithRetry(ctx, "memory", func() error {
+		usage, err := rc.client.MemoryUsage(ctx, key).Result()
+		if err != nil {
+			return err
+		}
+		result = usage
+		return nil
+	})
+	return result, err
 }
