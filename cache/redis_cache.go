@@ -1838,6 +1838,10 @@ func (rc *RedisCache) generateRecommendations(diagnostics *DiagnosticInfo) []str
 		}
 	}
 
+	// Ensure we always return a non-nil slice
+	if uniqueRecommendations == nil {
+		return []string{}
+	}
 	return uniqueRecommendations
 }
 

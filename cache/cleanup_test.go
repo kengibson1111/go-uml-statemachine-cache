@@ -247,7 +247,7 @@ func TestRedisCache_GetCacheSize(t *testing.T) {
 				EntityCount:       60,
 				MemoryUsed:        1048576, // 1MB
 				MemoryPeak:        2097152, // 2MB
-				MemoryOverhead:    524288,  // 512KB
+				MemoryOverhead:    0,       // No overhead in mock response
 			},
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock DBSize

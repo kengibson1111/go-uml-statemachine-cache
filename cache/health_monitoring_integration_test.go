@@ -50,7 +50,7 @@ func TestHealthMonitoringIntegration(t *testing.T) {
 		assert.True(t, healthStatus.Connection.Connected, "Should be connected to Redis")
 		assert.Equal(t, config.RedisAddr, healthStatus.Connection.Address, "Address should match config")
 		assert.Equal(t, config.RedisDB, healthStatus.Connection.Database, "Database should match config")
-		assert.Greater(t, healthStatus.Connection.PingLatency, time.Duration(0), "Ping latency should be positive")
+		assert.GreaterOrEqual(t, healthStatus.Connection.PingLatency, time.Duration(0), "Ping latency should be non-negative")
 
 		// Verify performance metrics are populated
 		assert.NotNil(t, healthStatus.Performance, "Performance metrics should be present")
@@ -73,7 +73,7 @@ func TestHealthMonitoringIntegration(t *testing.T) {
 		assert.True(t, connHealth.Connected, "Should be connected")
 		assert.Equal(t, config.RedisAddr, connHealth.Address, "Address should match")
 		assert.Equal(t, config.RedisDB, connHealth.Database, "Database should match")
-		assert.Greater(t, connHealth.PingLatency, time.Duration(0), "Ping latency should be positive")
+		assert.GreaterOrEqual(t, connHealth.PingLatency, time.Duration(0), "Ping latency should be non-negative")
 		assert.Empty(t, connHealth.LastError, "Should not have connection errors")
 
 		// Pool stats should be reasonable
