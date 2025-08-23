@@ -43,6 +43,22 @@ func (m *MockCache) GetEntity(ctx context.Context, umlVersion, diagramName, enti
 	return nil, nil
 }
 
+func (m *MockCache) GetEntityAsState(ctx context.Context, umlVersion, diagramName, entityID string) (*models.State, error) {
+	return nil, nil
+}
+
+func (m *MockCache) GetEntityAsTransition(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Transition, error) {
+	return nil, nil
+}
+
+func (m *MockCache) GetEntityAsRegion(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Region, error) {
+	return nil, nil
+}
+
+func (m *MockCache) GetEntityAsVertex(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Vertex, error) {
+	return nil, nil
+}
+
 func (m *MockCache) Cleanup(ctx context.Context, pattern string) error {
 	return nil
 }

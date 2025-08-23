@@ -23,6 +23,12 @@ type Cache interface {
 	StoreEntity(ctx context.Context, umlVersion, diagramName, entityID string, entity interface{}, ttl time.Duration) error
 	GetEntity(ctx context.Context, umlVersion, diagramName, entityID string) (interface{}, error)
 
+	// Type-safe entity retrieval methods
+	GetEntityAsState(ctx context.Context, umlVersion, diagramName, entityID string) (*models.State, error)
+	GetEntityAsTransition(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Transition, error)
+	GetEntityAsRegion(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Region, error)
+	GetEntityAsVertex(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Vertex, error)
+
 	// Management operations
 	Cleanup(ctx context.Context, pattern string) error
 	Health(ctx context.Context) error

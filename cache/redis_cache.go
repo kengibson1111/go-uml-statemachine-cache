@@ -221,7 +221,7 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 	return nil
 }
 
-// StoreStateMachine stores a parsed state machine with TTL support
+// StoreStateMachine stores a parsed state machine with TTL support and creates entity cache paths
 func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error {
 	if umlVersion == "" {
 		return NewValidationError("UML version cannot be empty", nil)
@@ -252,15 +252,37 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
-	// Serialize the state machine to JSON
-	data, err := json.Marshal(machine)
-	if err != nil {
-		return NewSerializationError(key, "failed to marshal state machine", err)
-	}
-
 	// Use default TTL if not specified
 	if ttl <= 0 {
 		ttl = rc.config.DefaultTTL
+	}
+
+	// Extract and store entities from the state machine, populate Entities map
+	entities := rc.extractEntitiesFromStateMachine(machine)
+
+	// Only initialize Entities map if there are entities to store
+	if len(entities) > 0 {
+		if machine.Entities == nil {
+			machine.Entities = make(map[string]string)
+		}
+
+		// Store each entity and populate the Entities map with cache paths
+		for entityID, entity := range entities {
+			entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
+			machine.Entities[entityID] = entityKey
+
+			// Store the entity
+			err := rc.StoreEntity(ctx, umlVersion, name, entityID, entity, ttl)
+			if err != nil {
+				return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
+			}
+		}
+	}
+
+	// Serialize the state machine to JSON (now with populated Entities map)
+	data, err := json.Marshal(machine)
+	if err != nil {
+		return NewSerializationError(key, "failed to marshal state machine", err)
 	}
 
 	// Store the serialized state machine in Redis
@@ -351,7 +373,22 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 
 	// If state machine exists and has entities, add entity keys for cascade deletion
 	if machine != nil && machine.Entities != nil {
+		// Sort entity IDs to ensure deterministic order for testing
+		var entityIDs []string
 		for entityID := range machine.Entities {
+			entityIDs = append(entityIDs, entityID)
+		}
+
+		// Sort to ensure consistent order
+		for i := 0; i < len(entityIDs); i++ {
+			for j := i + 1; j < len(entityIDs); j++ {
+				if entityIDs[i] > entityIDs[j] {
+					entityIDs[i], entityIDs[j] = entityIDs[j], entityIDs[i]
+				}
+			}
+		}
+
+		for _, entityID := range entityIDs {
 			entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
 			keysToDelete = append(keysToDelete, entityKey)
 		}
@@ -430,6 +467,51 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 	return nil
 }
 
+// extractEntitiesFromStateMachine extracts all entities from a state machine for caching
+func (rc *RedisCache) extractEntitiesFromStateMachine(machine *models.StateMachine) map[string]interface{} {
+	entities := make(map[string]interface{})
+
+	// Extract entities from all regions
+	for _, region := range machine.Regions {
+		rc.extractEntitiesFromRegion(region, entities)
+	}
+
+	return entities
+}
+
+// extractEntitiesFromRegion recursively extracts entities from a region
+func (rc *RedisCache) extractEntitiesFromRegion(region *models.Region, entities map[string]interface{}) {
+	// Add the region itself as an entity
+	if region.ID != "" {
+		entities[region.ID] = region
+	}
+
+	// Extract states
+	for _, state := range region.States {
+		if state.ID != "" {
+			entities[state.ID] = state
+		}
+		// Recursively extract from nested regions in composite states
+		for _, nestedRegion := range state.Regions {
+			rc.extractEntitiesFromRegion(nestedRegion, entities)
+		}
+	}
+
+	// Extract transitions
+	for _, transition := range region.Transitions {
+		if transition.ID != "" {
+			entities[transition.ID] = transition
+		}
+	}
+
+	// Extract vertices (pseudostates, final states, etc.)
+	for _, vertex := range region.Vertices {
+		if vertex.ID != "" {
+			entities[vertex.ID] = vertex
+		}
+	}
+}
+
 // GetEntity retrieves a state machine entity
 func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, entityID string) (interface{}, error) {
 	if umlVersion == "" {
@@ -475,6 +557,102 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 	}
 
 	return entity, nil
+}
+
+// GetEntityAsState retrieves a state machine entity and attempts to unmarshal it as a State
+func (rc *RedisCache) GetEntityAsState(ctx context.Context, umlVersion, diagramName, entityID string) (*models.State, error) {
+	entity, err := rc.GetEntity(ctx, umlVersion, diagramName, entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-marshal and unmarshal to convert to specific type
+	data, err := json.Marshal(entity)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+	}
+
+	var state models.State
+	err = json.Unmarshal(data, &state)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to unmarshal entity as State", err)
+	}
+
+	return &state, nil
+}
+
+// GetEntityAsTransition retrieves a state machine entity and attempts to unmarshal it as a Transition
+func (rc *RedisCache) GetEntityAsTransition(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Transition, error) {
+	entity, err := rc.GetEntity(ctx, umlVersion, diagramName, entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-marshal and unmarshal to convert to specific type
+	data, err := json.Marshal(entity)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+	}
+
+	var transition models.Transition
+	err = json.Unmarshal(data, &transition)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to unmarshal entity as Transition", err)
+	}
+
+	return &transition, nil
+}
+
+// GetEntityAsRegion retrieves a state machine entity and attempts to unmarshal it as a Region
+func (rc *RedisCache) GetEntityAsRegion(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Region, error) {
+	entity, err := rc.GetEntity(ctx, umlVersion, diagramName, entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-marshal and unmarshal to convert to specific type
+	data, err := json.Marshal(entity)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+	}
+
+	var region models.Region
+	err = json.Unmarshal(data, &region)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to unmarshal entity as Region", err)
+	}
+
+	return &region, nil
+}
+
+// GetEntityAsVertex retrieves a state machine entity and attempts to unmarshal it as a Vertex
+func (rc *RedisCache) GetEntityAsVertex(ctx context.Context, umlVersion, diagramName, entityID string) (*models.Vertex, error) {
+	entity, err := rc.GetEntity(ctx, umlVersion, diagramName, entityID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-marshal and unmarshal to convert to specific type
+	data, err := json.Marshal(entity)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+	}
+
+	var vertex models.Vertex
+	err = json.Unmarshal(data, &vertex)
+	if err != nil {
+		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
+		return nil, NewSerializationError(key, "failed to unmarshal entity as Vertex", err)
+	}
+
+	return &vertex, nil
 }
 
 // Cleanup removes cache entries matching a pattern

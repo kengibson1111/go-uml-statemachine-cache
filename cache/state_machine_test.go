@@ -9,6 +9,7 @@ import (
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,9 +75,18 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 				mockKeyGen.On("StateMachineKey", "1.0", "TestStateMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 
-				// Expect JSON marshaling of the state machine
-				expectedData, _ := json.Marshal(sampleStateMachine)
-				mockClient.On("SetWithRetry", ctx, expectedKey, expectedData, time.Hour).Return(nil)
+				// Mock entity extraction and storage (new functionality)
+				// The sampleStateMachine has region-1 and state-1 entities
+				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "region-1").Return("/machines/1.0/TestStateMachine/entities/region-1")
+				mockKeyGen.On("ValidateKey", "/machines/1.0/TestStateMachine/entities/region-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/1.0/TestStateMachine/entities/region-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "state-1").Return("/machines/1.0/TestStateMachine/entities/state-1")
+				mockKeyGen.On("ValidateKey", "/machines/1.0/TestStateMachine/entities/state-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/1.0/TestStateMachine/entities/state-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				// Expect JSON marshaling of the state machine (with updated Entities map)
+				mockClient.On("SetWithRetry", ctx, expectedKey, mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
 			},
 		},
 		{
@@ -98,8 +108,17 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 				mockKeyGen.On("StateMachineKey", "2.0", "DefaultTTLMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 
-				expectedData, _ := json.Marshal(sampleStateMachine)
-				mockClient.On("SetWithRetry", ctx, expectedKey, expectedData, time.Hour).Return(nil)
+				// Mock entity extraction and storage (new functionality)
+				mockKeyGen.On("EntityKey", "2.0", "DefaultTTLMachine", "region-1").Return("/machines/2.0/DefaultTTLMachine/entities/region-1")
+				mockKeyGen.On("ValidateKey", "/machines/2.0/DefaultTTLMachine/entities/region-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/2.0/DefaultTTLMachine/entities/region-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				mockKeyGen.On("EntityKey", "2.0", "DefaultTTLMachine", "state-1").Return("/machines/2.0/DefaultTTLMachine/entities/state-1")
+				mockKeyGen.On("ValidateKey", "/machines/2.0/DefaultTTLMachine/entities/state-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/2.0/DefaultTTLMachine/entities/state-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				// Expect JSON marshaling of the state machine (with updated Entities map)
+				mockClient.On("SetWithRetry", ctx, expectedKey, mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
 			},
 		},
 		{
@@ -173,8 +192,17 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 				mockKeyGen.On("StateMachineKey", "2.1.0", "VersionedMachine").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 
-				expectedData, _ := json.Marshal(sampleStateMachine)
-				mockClient.On("SetWithRetry", ctx, expectedKey, expectedData, time.Hour).Return(nil)
+				// Mock entity extraction and storage (new functionality)
+				mockKeyGen.On("EntityKey", "2.1.0", "VersionedMachine", "region-1").Return("/machines/2.1.0/VersionedMachine/entities/region-1")
+				mockKeyGen.On("ValidateKey", "/machines/2.1.0/VersionedMachine/entities/region-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/2.1.0/VersionedMachine/entities/region-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				mockKeyGen.On("EntityKey", "2.1.0", "VersionedMachine", "state-1").Return("/machines/2.1.0/VersionedMachine/entities/state-1")
+				mockKeyGen.On("ValidateKey", "/machines/2.1.0/VersionedMachine/entities/state-1").Return(nil)
+				mockClient.On("SetWithRetry", ctx, "/machines/2.1.0/VersionedMachine/entities/state-1", mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
+
+				// Expect JSON marshaling of the state machine (with updated Entities map)
+				mockClient.On("SetWithRetry", ctx, expectedKey, mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
 			},
 		},
 	}
@@ -625,8 +653,8 @@ func TestVersionedCachePaths(t *testing.T) {
 			mockKeyGen.On("StateMachineKey", tt.umlVersion, tt.machineName).Return(tt.expectedKey)
 			mockKeyGen.On("ValidateKey", tt.expectedKey).Return(nil)
 
-			expectedData, _ := json.Marshal(sampleMachine)
-			mockClient.On("SetWithRetry", ctx, tt.expectedKey, expectedData, time.Hour).Return(nil)
+			// Use mock.AnythingOfType since entity extraction might modify the JSON
+			mockClient.On("SetWithRetry", ctx, tt.expectedKey, mock.AnythingOfType("[]uint8"), time.Hour).Return(nil)
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
