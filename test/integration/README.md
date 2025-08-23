@@ -26,7 +26,27 @@ test\integration\run_integration_tests.bat
 powershell -ExecutionPolicy Bypass -File test\integration\run_integration_tests.ps1
 ```
 
+#### Linux/Mac Users
+Use the shell script for easy test execution:
+
+```bash
+# Make the script executable (if needed)
+chmod +x test/integration/run_integration_tests.sh
+
+# Run the integration test suite
+./test/integration/run_integration_tests.sh
+```
+
+The shell script provides the same functionality as the Windows PowerShell version:
+- Checks Go installation and Redis connectivity
+- Runs all test suites with appropriate timeouts
+- Provides colored output for better readability
+- Offers optional benchmark and stress test runs
+- Returns proper exit codes for CI/CD integration
+
 #### Manual Test Execution
+
+**Linux/Mac:**
 ```bash
 # Run all integration tests
 go test ./test/integration -v -timeout 300s
@@ -40,6 +60,25 @@ go test ./test/integration -bench=BenchmarkRedisCache_.* -benchtime=5s
 
 # Run with custom Redis configuration
 REDIS_ADDR=localhost:6379 REDIS_DB=15 go test ./test/integration -v
+```
+
+**Windows:**
+```cmd
+# Run all integration tests
+go test ./test/integration -v -timeout 300s
+
+# Run specific test categories
+go test ./test/integration -v -run "TestRedisCache_Concurrent.*" -timeout 60s
+go test ./test/integration -v -run "TestRedisCache_Performance.*" -timeout 120s
+
+# Run benchmarks
+go test ./test/integration -bench=BenchmarkRedisCache_.* -benchtime=5s
+
+# Run with custom Redis configuration (PowerShell)
+$env:REDIS_ADDR="localhost:6379"; $env:REDIS_DB="15"; go test ./test/integration -v
+
+# Run with custom Redis configuration (Command Prompt)
+set REDIS_ADDR=localhost:6379 && set REDIS_DB=15 && go test ./test/integration -v
 ```
 
 ### Test Categories
@@ -96,10 +135,17 @@ The integration tests include performance assertions:
 ### Troubleshooting
 
 #### Redis Connection Issues
+
+**All Platforms:**
 1. Ensure Redis is running: `redis-cli ping`
 2. Check Redis is accessible on localhost:6379
 3. Verify no firewall blocking the connection
-4. For Windows with Trend Micro: Ensure Redis executable is allowed
+
+**Platform-Specific:**
+- **Windows with Trend Micro**: Ensure Redis executable is allowed
+- **Linux**: Check if Redis service is running: `sudo systemctl status redis`
+- **Mac**: If using Homebrew: `brew services list | grep redis`
+- **Docker**: Ensure container is running: `docker ps | grep redis`
 
 #### Test Failures
 1. Check Redis logs for connection errors
