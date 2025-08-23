@@ -22,6 +22,7 @@ type Cache interface {
 	// Entity operations
 	StoreEntity(ctx context.Context, umlVersion, diagramName, entityID string, entity interface{}, ttl time.Duration) error
 	GetEntity(ctx context.Context, umlVersion, diagramName, entityID string) (interface{}, error)
+	UpdateStateMachineEntityMapping(ctx context.Context, umlVersion, name string, entityID, entityKey string, operation string) error
 
 	// Type-safe entity retrieval methods
 	GetEntityAsState(ctx context.Context, umlVersion, diagramName, entityID string) (*models.State, error)

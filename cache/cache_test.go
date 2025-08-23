@@ -43,6 +43,10 @@ func (m *MockCache) GetEntity(ctx context.Context, umlVersion, diagramName, enti
 	return nil, nil
 }
 
+func (m *MockCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVersion, name string, entityID, entityKey string, operation string) error {
+	return nil
+}
+
 func (m *MockCache) GetEntityAsState(ctx context.Context, umlVersion, diagramName, entityID string) (*models.State, error) {
 	return nil, nil
 }

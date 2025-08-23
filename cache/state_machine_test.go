@@ -420,6 +420,12 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "state-1").Return("/machines/1.0/TestStateMachine/entities/state-1")
 				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "transition-1").Return("/machines/1.0/TestStateMachine/entities/transition-1")
 
+				// Mock entity key generation for orphaned entity scan
+				mockKeyGen.On("EntityKey", "1.0", "TestStateMachine", "*").Return("/machines/1.0/TestStateMachine/entities/*")
+
+				// Mock Redis client for orphaned entity scan - return nil to skip the scan
+				mockClient.On("Client").Return(nil)
+
 				// Mock the deletion of state machine and entities
 				expectedKeys := []string{
 					expectedKey,
@@ -441,6 +447,12 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 
 				// Mock getting the state machine - not found
 				mockClient.On("GetWithRetry", ctx, expectedKey).Return("", redis.Nil)
+
+				// Mock entity key generation for orphaned entity scan
+				mockKeyGen.On("EntityKey", "1.0", "NonExistentMachine", "*").Return("/machines/1.0/NonExistentMachine/entities/*")
+
+				// Mock Redis client for orphaned entity scan - return nil to skip the scan
+				mockClient.On("Client").Return(nil)
 
 				// Mock the deletion of just the state machine key
 				mockClient.On("DelWithRetry", ctx, []string{expectedKey}).Return(nil)

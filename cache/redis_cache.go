@@ -260,34 +260,51 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	// Extract and store entities from the state machine, populate Entities map
 	entities := rc.extractEntitiesFromStateMachine(machine)
 
-	// Only initialize Entities map if there are entities to store
-	if len(entities) > 0 {
-		if machine.Entities == nil {
-			machine.Entities = make(map[string]string)
+	// Initialize or clear the Entities map to ensure referential integrity
+	if machine.Entities == nil {
+		machine.Entities = make(map[string]string)
+	} else {
+		// Clear existing entities to ensure consistency
+		for entityID := range machine.Entities {
+			delete(machine.Entities, entityID)
+		}
+	}
+
+	// Store each entity and populate the Entities map with cache paths
+	for entityID, entity := range entities {
+		entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
+
+		// Validate entity key before storing
+		if err := rc.keyGen.ValidateKey(entityKey); err != nil {
+			return NewKeyInvalidError(entityKey, fmt.Sprintf("invalid entity key generated for '%s': %v", entityID, err))
 		}
 
-		// Store each entity and populate the Entities map with cache paths
-		for entityID, entity := range entities {
-			entityKey := rc.keyGen.EntityKey(umlVersion, name, entityID)
-			machine.Entities[entityID] = entityKey
+		// Update the Entities mapping for referential integrity
+		machine.Entities[entityID] = entityKey
 
-			// Store the entity
-			err := rc.StoreEntity(ctx, umlVersion, name, entityID, entity, ttl)
-			if err != nil {
-				return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
-			}
+		// Store the entity
+		err := rc.StoreEntity(ctx, umlVersion, name, entityID, entity, ttl)
+		if err != nil {
+			// If entity storage fails, clean up any previously stored entities to maintain consistency
+			rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
+			return fmt.Errorf("failed to store entity '%s': %w", entityID, err)
 		}
 	}
 
 	// Serialize the state machine to JSON (now with populated Entities map)
 	data, err := json.Marshal(machine)
 	if err != nil {
+		// Clean up entities if state machine serialization fails
+		rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
 		return NewSerializationError(key, "failed to marshal state machine", err)
 	}
 
 	// Store the serialized state machine in Redis
 	err = rc.client.SetWithRetry(ctx, key, data, ttl)
 	if err != nil {
+		// Clean up entities if state machine storage fails
+		rc.cleanupPartialEntityStorage(ctx, umlVersion, name, machine.Entities)
+
 		if isTimeoutError(err) {
 			return NewTimeoutError(key, "timeout storing state machine", err)
 		}
@@ -394,9 +411,16 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 		}
 	}
 
-	// Note: In a production system, you might also want to use Redis SCAN to find
-	// additional entity keys that might exist but aren't tracked in the Entities map.
-	// For now, we rely on the Entities map for cascade deletion.
+	// Additional safety check: scan for any orphaned entity keys that might exist
+	// but aren't tracked in the Entities map to ensure complete cleanup
+	entityPattern := rc.keyGen.EntityKey(umlVersion, name, "*")
+	orphanedKeys, err := rc.scanForOrphanedEntities(ctx, entityPattern, machine)
+	if err != nil {
+		// Log the error but don't fail the deletion - this is a best-effort cleanup
+		// In a production system, you might want to log this for monitoring
+	} else {
+		keysToDelete = append(keysToDelete, orphanedKeys...)
+	}
 
 	// Delete all keys (state machine + entities) in a single operation
 	if len(keysToDelete) > 0 {
@@ -413,6 +437,39 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 	}
 
 	return nil
+}
+
+// scanForOrphanedEntities scans for entity keys that might exist but aren't tracked in the Entities map
+func (rc *RedisCache) scanForOrphanedEntities(ctx context.Context, pattern string, machine *models.StateMachine) ([]string, error) {
+	client := rc.client.Client()
+	if client == nil {
+		return nil, fmt.Errorf("Redis client not available")
+	}
+
+	iter := client.Scan(ctx, 0, pattern, 0).Iterator()
+	var orphanedKeys []string
+
+	// Track keys that are already in the Entities map
+	trackedKeys := make(map[string]bool)
+	if machine != nil && machine.Entities != nil {
+		for _, entityKey := range machine.Entities {
+			trackedKeys[entityKey] = true
+		}
+	}
+
+	for iter.Next(ctx) {
+		key := iter.Val()
+		// Only add keys that aren't already tracked in the Entities map
+		if !trackedKeys[key] {
+			orphanedKeys = append(orphanedKeys, key)
+		}
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan for orphaned entities: %w", err)
+	}
+
+	return orphanedKeys, nil
 }
 
 // StoreEntity stores a state machine entity with TTL support
@@ -467,6 +524,69 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 	return nil
 }
 
+// UpdateStateMachineEntityMapping updates the Entities mapping in a stored state machine
+// This ensures referential integrity when entities are added or removed independently
+func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVersion, name string, entityID, entityKey string, operation string) error {
+	if umlVersion == "" {
+		return NewValidationError("UML version cannot be empty", nil)
+	}
+
+	if name == "" {
+		return NewValidationError("state machine name cannot be empty", nil)
+	}
+
+	if entityID == "" {
+		return NewValidationError("entity ID cannot be empty", nil)
+	}
+
+	if operation != "add" && operation != "remove" {
+		return NewValidationError("operation must be 'add' or 'remove'", nil)
+	}
+
+	if operation == "add" && entityKey == "" {
+		return NewValidationError("entity key cannot be empty for add operation", nil)
+	}
+
+	// Get the current state machine
+	machine, err := rc.GetStateMachine(ctx, umlVersion, name)
+	if err != nil {
+		return fmt.Errorf("failed to get state machine for entity mapping update: %w", err)
+	}
+
+	// Initialize Entities map if it doesn't exist
+	if machine.Entities == nil {
+		machine.Entities = make(map[string]string)
+	}
+
+	// Update the mapping based on operation
+	switch operation {
+	case "add":
+		machine.Entities[entityID] = entityKey
+	case "remove":
+		delete(machine.Entities, entityID)
+	}
+
+	// Store the updated state machine
+	key := rc.keyGen.StateMachineKey(umlVersion, name)
+	data, err := json.Marshal(machine)
+	if err != nil {
+		return NewSerializationError(key, "failed to marshal updated state machine", err)
+	}
+
+	err = rc.client.SetWithRetry(ctx, key, data, rc.config.DefaultTTL)
+	if err != nil {
+		if isTimeoutError(err) {
+			return NewTimeoutError(key, "timeout updating state machine entity mapping", err)
+		}
+		if isConnectionError(err) {
+			return NewConnectionError("failed to update state machine entity mapping", err)
+		}
+		return fmt.Errorf("failed to update state machine entity mapping: %w", err)
+	}
+
+	return nil
+}
+
 // extractEntitiesFromStateMachine extracts all entities from a state machine for caching
 func (rc *RedisCache) extractEntitiesFromStateMachine(machine *models.StateMachine) map[string]interface{} {
 	entities := make(map[string]interface{})
@@ -477,6 +597,24 @@ func (rc *RedisCache) extractEntitiesFromStateMachine(machine *models.StateMachi
 	}
 
 	return entities
+}
+
+// cleanupPartialEntityStorage removes entities that were stored during a failed state machine storage operation
+func (rc *RedisCache) cleanupPartialEntityStorage(ctx context.Context, umlVersion, diagramName string, entityMap map[string]string) {
+	if len(entityMap) == 0 {
+		return
+	}
+
+	// Collect all entity keys to delete
+	var keysToDelete []string
+	for _, entityKey := range entityMap {
+		keysToDelete = append(keysToDelete, entityKey)
+	}
+
+	// Attempt to delete the entities (best effort - don't propagate errors)
+	if len(keysToDelete) > 0 {
+		_ = rc.client.DelWithRetry(ctx, keysToDelete...)
+	}
 }
 
 // extractEntitiesFromRegion recursively extracts entities from a region
