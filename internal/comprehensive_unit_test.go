@@ -837,21 +837,25 @@ func TestContextValidation_Comprehensive(t *testing.T) {
 				expectError: false,
 				description: "TODO context should be accepted",
 			},
+			// the Go warning of "cancel function should be called" does not fit the test. expectError
+			// should be false because the timeout is an hour. Code for the "context with timeout" test
+			// fits the intent of the test. Don't worry about the warning.
 			{
 				name: "context with timeout",
 				ctx: func() context.Context {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
-					cancel()
+					ctx, _ := context.WithTimeout(context.Background(), time.Hour)
 					return ctx
 				}(),
 				expectError: false,
 				description: "context with timeout should be accepted",
 			},
+			// the Go warning of "cancel function should be called" does not fit the test. expectError
+			// should be false because the deadline is in an hour. Code for the "context with deadline"
+			// test fits the intent of the test. Don't worry about the warning.
 			{
 				name: "context with deadline",
 				ctx: func() context.Context {
-					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
-					cancel()
+					ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
 					return ctx
 				}(),
 				expectError: false,
@@ -867,12 +871,15 @@ func TestContextValidation_Comprehensive(t *testing.T) {
 				expectError: true,
 				description: "cancelled context should be rejected",
 			},
+			// the Go warning of "cancel function should be called" does not fit the test. expectError
+			// should be true because the timeout is less than the time sleeping. There isn't an
+			// explicit cancel operation happening in an expiration test case. Code for the
+			// "expired context" test fits the intent of the test. Don't worry about the warning.
 			{
 				name: "expired context",
 				ctx: func() context.Context {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+					ctx, _ := context.WithTimeout(context.Background(), time.Nanosecond)
 					time.Sleep(time.Millisecond)
-					cancel()
 					return ctx
 				}(),
 				expectError: true,
