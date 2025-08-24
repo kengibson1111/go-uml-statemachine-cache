@@ -438,7 +438,7 @@ func TestKeyGenerator_ComprehensiveEdgeCases(t *testing.T) {
 			},
 			{
 				name:        "key over maximum length",
-				key:         "/diagrams/puml/" + strings.Repeat("a", 234), // Total length = 251
+				key:         "/diagrams/puml/" + strings.Repeat("a", 236), // Total length = 251
 				expectValid: false,
 				description: "key over maximum length should be invalid",
 			},
@@ -648,8 +648,8 @@ func TestErrorRecoveryManager_ComprehensiveScenarios(t *testing.T) {
 		cb2 := erm.GetCircuitBreaker("operation2")
 		cb3 := erm.GetCircuitBreaker("operation1") // Same as cb1
 
-		assert.NotEqual(t, cb1, cb2)
-		assert.Equal(t, cb1, cb3)
+		assert.NotSame(t, cb1, cb2)
+		assert.Same(t, cb1, cb3)
 	})
 
 	t.Run("ShouldRetry with different error types", func(t *testing.T) {

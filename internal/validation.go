@@ -24,11 +24,13 @@ type InputValidator struct {
 // NewInputValidator creates a new input validator with default settings
 func NewInputValidator() *InputValidator {
 	return &InputValidator{
-		maxStringLength:     10000, // 10KB max for string inputs
-		maxKeyLength:        250,   // Redis key length limit
-		allowedCharPattern:  regexp.MustCompile(`^[\w\-_/.%\s]+$`),
-		sqlInjectionPattern: regexp.MustCompile(`(?i)(union\s+select|insert\s+into|update\s+.*set|delete\s+from|drop\s+table|create\s+table|alter\s+table|exec\s*\(|execute\s*\(|script\s*>|javascript\s*:|vbscript\s*:|;\s*update\s+|;\s*select\s+|or\s+1\s*=\s*1)`),
-		xssPattern:          regexp.MustCompile(`(?i)(<script|javascript:|vbscript:|onload=|onerror=|onclick=|<iframe|<object|<embed)`),
+		maxStringLength:    10000, // 10KB max for string inputs
+		maxKeyLength:       250,   // Redis key length limit
+		allowedCharPattern: regexp.MustCompile(`^[\w\-_/.%\s]+$`),
+		// Enhanced SQL injection pattern to catch more variations
+		sqlInjectionPattern: regexp.MustCompile(`(?i)(union\s+(all\s+)?select|insert\s+into|update\s+.*set|delete\s+from|drop\s+(table|database)|create\s+table|alter\s+table|exec\s*(\(|xp_)|execute\s*\(|script\s*>|javascript\s*:|vbscript\s*:|;\s*(update|select|drop|exec|waitfor)|or\s+['"]?[a-z0-9]+['"]?\s*=\s*['"]?[a-z0-9]+['"]?|admin['"]?\s*(--|/\*)|having\s+\d+\s*=\s*\d+|group\s+by\s+\d+|order\s+by\s+\d+|waitfor\s+delay)`),
+		// Enhanced XSS pattern to catch more event handlers and tags
+		xssPattern: regexp.MustCompile(`(?i)(<script|javascript:|vbscript:|on\w+\s*=|<iframe|<object|<embed|<img[^>]*onerror|<svg[^>]*onload|<body[^>]*onpageshow|<input[^>]*onfocus|<select[^>]*onfocus|<textarea[^>]*onfocus|<keygen[^>]*onfocus|<video[^>]*onerror|<audio[^>]*onerror|<details[^>]*ontoggle)`),
 	}
 }
 
@@ -50,6 +52,11 @@ func (v *InputValidator) ValidateAndSanitizeString(input, fieldName string) (str
 
 	// Sanitize first, then check for remaining control characters
 	sanitized := v.sanitizeString(input)
+
+	// Check if sanitized string is empty (was only whitespace)
+	if sanitized == "" {
+		return "", NewValidationError(fmt.Sprintf("%s cannot be empty", fieldName), nil)
+	}
 
 	// Check for control characters in sanitized string (except tab, newline, carriage return)
 	for i, r := range sanitized {
@@ -271,6 +278,20 @@ func (v *InputValidator) checkSecurityThreats(input, fieldName string) error {
 		return NewValidationError(fmt.Sprintf("%s contains potential XSS patterns", fieldName), nil)
 	}
 
+	// Check for additional protocol-based attacks
+	protocolPatterns := []string{
+		"file://",
+		"ftp://",
+		"ldap://",
+	}
+
+	lowerInput := strings.ToLower(input)
+	for _, pattern := range protocolPatterns {
+		if strings.Contains(lowerInput, pattern) {
+			return NewValidationError(fmt.Sprintf("%s contains potential protocol-based attack pattern: %s", fieldName, pattern), nil)
+		}
+	}
+
 	// Check for script injection
 	scriptPatterns := []string{
 		"<script",
@@ -280,7 +301,6 @@ func (v *InputValidator) checkSecurityThreats(input, fieldName string) error {
 		"data:application/javascript",
 	}
 
-	lowerInput := strings.ToLower(input)
 	for _, pattern := range scriptPatterns {
 		if strings.Contains(lowerInput, pattern) {
 			return NewValidationError(fmt.Sprintf("%s contains potential script injection pattern: %s", fieldName, pattern), nil)

@@ -2,261 +2,331 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/kengibson1111/go-uml-statemachine-models/models"
-
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
-func main() {
-	// Create cache configuration
-	config := &cache.RedisConfig{
-		RedisAddr:    "localhost:6379",
-		RedisDB:      0,
-		MaxRetries:   3,
-		DialTimeout:  5 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
-		PoolSize:     10,
-		DefaultTTL:   time.Hour,
-	}
+// Sample PlantUML diagram for the state machine
+const samplePUMLDiagram = `@startuml
+!define PUML_VERSION 1.2024.8
 
-	// Create Redis cache instance
+state "Order Processing" as OrderProcessing {
+  state "Pending" as pending
+  state "Validated" as validated
+  state "Shipped" as shipped
+  state "Delivered" as delivered
+  state "Cancelled" as cancelled
+  
+  [*] --> pending
+  pending --> validated : validate
+  pending --> cancelled : cancel
+  validated --> shipped : ship
+  validated --> cancelled : cancel
+  shipped --> delivered : deliver
+  shipped --> cancelled : cancel
+}
+
+OrderProcessing --> [*]
+@enduml`
+
+func main() {
+	fmt.Println("=== Redis Cache State Machine Example ===")
+	fmt.Println("This example demonstrates caching state machines with entities")
+	fmt.Println()
+
+	// Create Redis cache configuration
+	config := cache.DefaultRedisConfig()
+	config.RedisAddr = "localhost:6379"
+	config.DefaultTTL = 2 * time.Hour
+
+	// Create cache instance
 	redisCache, err := cache.NewRedisCache(config)
 	if err != nil {
 		log.Fatalf("Failed to create Redis cache: %v", err)
 	}
-	defer redisCache.Close()
+	defer func() {
+		if err := redisCache.Close(); err != nil {
+			log.Printf("Error closing cache: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 
-	// Check cache health
+	// Test Redis connection
+	fmt.Println("1. Testing Redis connection...")
 	if err := redisCache.Health(ctx); err != nil {
-		log.Printf("Warning: Redis health check failed: %v", err)
-		log.Println("Make sure Redis is running on localhost:6379")
-		return
+		log.Fatalf("Redis health check failed: %v", err)
 	}
+	fmt.Println("✓ Redis connection successful")
+	fmt.Println()
 
-	fmt.Println("=== State Machine Cache Example ===")
+	// First, store the diagram (required before storing state machine)
+	diagramName := "order-processing-workflow"
+	umlVersion := "1.2024.8"
 
-	// First, create and store the corresponding diagram (required for referential integrity)
-	diagramContent := `@startuml
-title Order Processing State Machine
-
-[*] --> Pending
-Pending --> Processing : ProcessOrder
-Processing --> Completed : Complete
-Processing --> Cancelled : Cancel
-Completed --> [*]
-Cancelled --> [*]
-
-@enduml`
-
-	machineName := "OrderProcessing"
-	fmt.Printf("Storing diagram '%s' (required for state machine)...\n", machineName)
-	err = redisCache.StoreDiagram(ctx, machineName, diagramContent, 2*time.Hour)
+	fmt.Printf("2. Storing diagram '%s'...\n", diagramName)
+	err = redisCache.StoreDiagram(ctx, diagramName, samplePUMLDiagram, 1*time.Hour)
 	if err != nil {
 		log.Fatalf("Failed to store diagram: %v", err)
 	}
 	fmt.Println("✓ Diagram stored successfully")
+	fmt.Println()
 
-	// Create a sample state machine
+	// Create a sample state machine with entities
+	fmt.Println("3. Creating sample state machine with entities...")
 	stateMachine := createSampleStateMachine()
+	fmt.Printf("✓ Created state machine with %d regions and %d states\n",
+		len(stateMachine.Regions), countStates(stateMachine))
+	fmt.Println()
 
-	// Store the state machine
-	umlVersion := "2.5.1"
-	ttl := 2 * time.Hour
-
-	fmt.Printf("Storing state machine '%s' (version %s)...\n", machineName, umlVersion)
-	err = redisCache.StoreStateMachine(ctx, umlVersion, machineName, stateMachine, ttl)
+	// Store the state machine (this will also store individual entities)
+	fmt.Printf("4. Storing state machine '%s' (version %s)...\n", diagramName, umlVersion)
+	err = redisCache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, 1*time.Hour)
 	if err != nil {
 		log.Fatalf("Failed to store state machine: %v", err)
 	}
-	fmt.Println("✓ State machine stored successfully")
+	fmt.Println("✓ State machine and entities stored successfully")
+	fmt.Printf("Entity mappings created: %d\n", len(stateMachine.Entities))
+	fmt.Println()
 
 	// Retrieve the state machine
-	fmt.Printf("Retrieving state machine '%s' (version %s)...\n", machineName, umlVersion)
-	retrievedMachine, err := redisCache.GetStateMachine(ctx, umlVersion, machineName)
+	fmt.Printf("5. Retrieving state machine '%s'...\n", diagramName)
+	retrievedMachine, err := redisCache.GetStateMachine(ctx, umlVersion, diagramName)
 	if err != nil {
 		log.Fatalf("Failed to retrieve state machine: %v", err)
 	}
 	fmt.Println("✓ State machine retrieved successfully")
+	fmt.Printf("Retrieved machine has %d regions and %d entity mappings\n",
+		len(retrievedMachine.Regions), len(retrievedMachine.Entities))
+	fmt.Println()
 
-	// Display retrieved state machine details
-	fmt.Printf("\nRetrieved State Machine Details:\n")
-	fmt.Printf("  ID: %s\n", retrievedMachine.ID)
-	fmt.Printf("  Name: %s\n", retrievedMachine.Name)
-	fmt.Printf("  Version: %s\n", retrievedMachine.Version)
-	fmt.Printf("  Regions: %d\n", len(retrievedMachine.Regions))
-	fmt.Printf("  Entities: %d\n", len(retrievedMachine.Entities))
+	// Demonstrate entity retrieval
+	fmt.Println("6. Demonstrating entity retrieval...")
+	if len(retrievedMachine.Entities) > 0 {
+		// Get the first entity as an example
+		var firstEntityID string
+		for entityID := range retrievedMachine.Entities {
+			firstEntityID = entityID
+			break
+		}
 
-	if len(retrievedMachine.Regions) > 0 {
-		region := retrievedMachine.Regions[0]
-		fmt.Printf("  First Region: %s (States: %d, Transitions: %d)\n",
-			region.Name, len(region.States), len(region.Transitions))
+		fmt.Printf("Retrieving entity '%s'...\n", firstEntityID)
+		entity, err := redisCache.GetEntity(ctx, umlVersion, diagramName, firstEntityID)
+		if err != nil {
+			log.Printf("Warning: Failed to retrieve entity: %v", err)
+		} else {
+			fmt.Printf("✓ Entity retrieved successfully (type: %T)\n", entity)
+		}
+
+		// Try type-safe retrieval if it's a state
+		if state, err := redisCache.GetEntityAsState(ctx, umlVersion, diagramName, firstEntityID); err == nil {
+			fmt.Printf("✓ Successfully retrieved as State: %s\n", state.Name)
+		}
 	}
+	fmt.Println()
 
-	// Demonstrate JSON serialization
-	fmt.Printf("\nJSON Serialization Example:\n")
-	jsonData, err := json.MarshalIndent(retrievedMachine, "", "  ")
+	// Demonstrate error handling
+	fmt.Println("7. Testing error handling...")
+
+	// Try to store state machine without diagram
+	fmt.Println("Attempting to store state machine without corresponding diagram...")
+	err = redisCache.StoreStateMachine(ctx, umlVersion, "non-existent-diagram", stateMachine, 1*time.Hour)
 	if err != nil {
-		log.Fatalf("Failed to marshal state machine to JSON: %v", err)
-	}
-	fmt.Printf("State machine as JSON (first 500 chars):\n%s...\n",
-		string(jsonData[:min(500, len(jsonData))]))
-
-	// Test versioned storage - store same machine with different version
-	newVersion := "3.0.0"
-	fmt.Printf("\nStoring same machine with different version (%s)...\n", newVersion)
-	err = redisCache.StoreStateMachine(ctx, newVersion, machineName, stateMachine, ttl)
-	if err != nil {
-		log.Fatalf("Failed to store versioned state machine: %v", err)
-	}
-	fmt.Println("✓ Versioned state machine stored successfully")
-
-	// Verify both versions exist
-	fmt.Printf("Verifying both versions exist:\n")
-
-	// Check version 2.5.1
-	_, err = redisCache.GetStateMachine(ctx, umlVersion, machineName)
-	if err != nil {
-		log.Fatalf("Failed to retrieve original version: %v", err)
-	}
-	fmt.Printf("  ✓ Version %s exists\n", umlVersion)
-
-	// Check version 3.0.0
-	_, err = redisCache.GetStateMachine(ctx, newVersion, machineName)
-	if err != nil {
-		log.Fatalf("Failed to retrieve new version: %v", err)
-	}
-	fmt.Printf("  ✓ Version %s exists\n", newVersion)
-
-	// Clean up - delete the state machines and diagram
-	fmt.Printf("\nCleaning up...\n")
-	err = redisCache.DeleteStateMachine(ctx, umlVersion, machineName)
-	if err != nil {
-		log.Printf("Warning: Failed to delete state machine (v%s): %v", umlVersion, err)
+		if cache.IsValidationError(err) {
+			fmt.Println("✓ Correctly prevented storing state machine without diagram")
+		} else {
+			fmt.Printf("✗ Unexpected error type: %v\n", err)
+		}
 	} else {
-		fmt.Printf("  ✓ Deleted version %s\n", umlVersion)
+		fmt.Println("✗ Expected validation error but got none")
 	}
 
-	err = redisCache.DeleteStateMachine(ctx, newVersion, machineName)
+	// Try to get non-existent state machine
+	fmt.Println("Attempting to retrieve non-existent state machine...")
+	_, err = redisCache.GetStateMachine(ctx, umlVersion, "non-existent-machine")
 	if err != nil {
-		log.Printf("Warning: Failed to delete state machine (v%s): %v", newVersion, err)
+		if cache.IsNotFoundError(err) {
+			fmt.Println("✓ Correctly handled not found error")
+		} else {
+			fmt.Printf("✗ Unexpected error type: %v\n", err)
+		}
 	} else {
-		fmt.Printf("  ✓ Deleted version %s\n", newVersion)
+		fmt.Println("✗ Expected error but got none")
 	}
+	fmt.Println()
 
-	// Clean up the diagram
-	err = redisCache.DeleteDiagram(ctx, machineName)
+	// Demonstrate cache monitoring
+	fmt.Println("8. Demonstrating cache monitoring...")
+
+	// Get cache size information
+	sizeInfo, err := redisCache.GetCacheSize(ctx)
 	if err != nil {
-		log.Printf("Warning: Failed to delete diagram '%s': %v", machineName, err)
+		log.Printf("Warning: Failed to get cache size: %v", err)
 	} else {
-		fmt.Printf("  ✓ Deleted diagram '%s'\n", machineName)
+		fmt.Printf("Cache statistics:\n")
+		fmt.Printf("  Total keys: %d\n", sizeInfo.TotalKeys)
+		fmt.Printf("  Diagrams: %d\n", sizeInfo.DiagramCount)
+		fmt.Printf("  State machines: %d\n", sizeInfo.StateMachineCount)
+		fmt.Printf("  Entities: %d\n", sizeInfo.EntityCount)
+	}
+	fmt.Println()
+
+	// Cleanup - delete state machine (cascade delete will remove entities)
+	fmt.Printf("9. Cleaning up state machine '%s'...\n", diagramName)
+	err = redisCache.DeleteStateMachine(ctx, umlVersion, diagramName)
+	if err != nil {
+		log.Printf("Warning: Failed to delete state machine: %v", err)
+	} else {
+		fmt.Println("✓ State machine and entities deleted successfully")
 	}
 
-	fmt.Println("\n=== Example completed successfully ===")
+	// Cleanup diagram
+	fmt.Printf("Cleaning up diagram '%s'...\n", diagramName)
+	err = redisCache.DeleteDiagram(ctx, diagramName)
+	if err != nil {
+		log.Printf("Warning: Failed to delete diagram: %v", err)
+	} else {
+		fmt.Println("✓ Diagram deleted successfully")
+	}
+
+	fmt.Println()
+	fmt.Println("=== State Machine Cache Example Complete ===")
 }
 
+// createSampleStateMachine creates a sample state machine for demonstration
 func createSampleStateMachine() *models.StateMachine {
-	return &models.StateMachine{
-		ID:      "order-processing-sm",
-		Name:    "OrderProcessing",
-		Version: "1.0",
-		Regions: []*models.Region{
-			{
-				ID:   "main-region",
-				Name: "MainRegion",
-				States: []*models.State{
-					{
-						Vertex: models.Vertex{
-							ID:   "pending",
-							Name: "Pending",
-							Type: "state",
-						},
-						IsSimple: true,
-					},
-					{
-						Vertex: models.Vertex{
-							ID:   "processing",
-							Name: "Processing",
-							Type: "state",
-						},
-						IsSimple: true,
-					},
-					{
-						Vertex: models.Vertex{
-							ID:   "completed",
-							Name: "Completed",
-							Type: "finalstate",
-						},
-						IsSimple: true,
-					},
-					{
-						Vertex: models.Vertex{
-							ID:   "cancelled",
-							Name: "Cancelled",
-							Type: "finalstate",
-						},
-						IsSimple: true,
-					},
-				},
-				Transitions: []*models.Transition{
-					{
-						ID:   "start-processing",
-						Name: "StartProcessing",
-						Kind: models.TransitionKindExternal,
-						Triggers: []*models.Trigger{
-							{
-								ID:   "process-trigger",
-								Name: "ProcessOrder",
-								Event: &models.Event{
-									ID:   "process-event",
-									Name: "ProcessOrderEvent",
-									Type: models.EventTypeSignal,
-								},
-							},
-						},
-					},
-					{
-						ID:   "complete-order",
-						Name: "CompleteOrder",
-						Kind: models.TransitionKindExternal,
-					},
-					{
-						ID:   "cancel-order",
-						Name: "CancelOrder",
-						Kind: models.TransitionKindExternal,
-					},
-				},
-			},
+	// Create states
+	pendingState := &models.State{
+		Vertex: models.Vertex{
+			ID:   "pending",
+			Name: "Pending",
+			Type: "state",
 		},
-		Entities: map[string]string{
-			"pending":          "/machines/2.5.1/OrderProcessing/entities/pending",
-			"processing":       "/machines/2.5.1/OrderProcessing/entities/processing",
-			"completed":        "/machines/2.5.1/OrderProcessing/entities/completed",
-			"cancelled":        "/machines/2.5.1/OrderProcessing/entities/cancelled",
-			"start-processing": "/machines/2.5.1/OrderProcessing/entities/start-processing",
-			"complete-order":   "/machines/2.5.1/OrderProcessing/entities/complete-order",
-			"cancel-order":     "/machines/2.5.1/OrderProcessing/entities/cancel-order",
+		IsSimple: true,
+	}
+
+	validatedState := &models.State{
+		Vertex: models.Vertex{
+			ID:   "validated",
+			Name: "Validated",
+			Type: "state",
 		},
-		Metadata: map[string]interface{}{
-			"created_by":   "state_machine_example",
-			"description":  "Sample order processing state machine",
-			"domain":       "e-commerce",
-			"complexity":   "simple",
-			"states_count": 4,
+		IsSimple: true,
+	}
+
+	shippedState := &models.State{
+		Vertex: models.Vertex{
+			ID:   "shipped",
+			Name: "Shipped",
+			Type: "state",
+		},
+		IsSimple: true,
+	}
+
+	deliveredState := &models.State{
+		Vertex: models.Vertex{
+			ID:   "delivered",
+			Name: "Delivered",
+			Type: "state",
+		},
+		IsSimple: true,
+	}
+
+	cancelledState := &models.State{
+		Vertex: models.Vertex{
+			ID:   "cancelled",
+			Name: "Cancelled",
+			Type: "state",
+		},
+		IsSimple: true,
+	}
+
+	// Create transitions
+	validateTransition := &models.Transition{
+		ID:     "t1",
+		Name:   "validate",
+		Source: &pendingState.Vertex,
+		Target: &validatedState.Vertex,
+		Kind:   models.TransitionKindExternal,
+	}
+
+	cancelFromPendingTransition := &models.Transition{
+		ID:     "t2",
+		Name:   "cancel",
+		Source: &pendingState.Vertex,
+		Target: &cancelledState.Vertex,
+		Kind:   models.TransitionKindExternal,
+	}
+
+	shipTransition := &models.Transition{
+		ID:     "t3",
+		Name:   "ship",
+		Source: &validatedState.Vertex,
+		Target: &shippedState.Vertex,
+		Kind:   models.TransitionKindExternal,
+	}
+
+	deliverTransition := &models.Transition{
+		ID:     "t4",
+		Name:   "deliver",
+		Source: &shippedState.Vertex,
+		Target: &deliveredState.Vertex,
+		Kind:   models.TransitionKindExternal,
+	}
+
+	// Create main region
+	mainRegion := &models.Region{
+		ID:   "main-region",
+		Name: "Order Processing Region",
+		States: []*models.State{
+			pendingState,
+			validatedState,
+			shippedState,
+			deliveredState,
+			cancelledState,
+		},
+		Transitions: []*models.Transition{
+			validateTransition,
+			cancelFromPendingTransition,
+			shipTransition,
+			deliverTransition,
+		},
+		Vertices: []*models.Vertex{
+			&pendingState.Vertex,
+			&validatedState.Vertex,
+			&shippedState.Vertex,
+			&deliveredState.Vertex,
+			&cancelledState.Vertex,
 		},
 	}
+
+	// Create state machine
+	stateMachine := &models.StateMachine{
+		ID:       "order-processing-sm",
+		Name:     "Order Processing State Machine",
+		Version:  "1.0.0",
+		Regions:  []*models.Region{mainRegion},
+		Entities: make(map[string]string), // Will be populated by cache
+		Metadata: map[string]interface{}{
+			"description": "Sample order processing workflow",
+			"author":      "Cache Example",
+			"created":     time.Now().Format(time.RFC3339),
+		},
+		CreatedAt: time.Now(),
+	}
+
+	return stateMachine
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+// countStates counts the total number of states in a state machine
+func countStates(sm *models.StateMachine) int {
+	count := 0
+	for _, region := range sm.Regions {
+		count += len(region.States)
 	}
-	return b
+	return count
 }

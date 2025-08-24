@@ -64,8 +64,9 @@ func (kg *DefaultKeyGenerator) ValidateKey(key string) error {
 		}
 	}
 
-	// Check for path traversal attempts
-	if strings.Contains(key, "..") {
+	// Check for unencoded path traversal attempts
+	// Encoded path traversal (like %2E%2E or ..%2F) is allowed as it's URL encoded
+	if strings.Contains(key, "../") || strings.Contains(key, "..\\") || key == ".." || strings.HasSuffix(key, "/..") {
 		return fmt.Errorf("key contains path traversal sequence: %s", key)
 	}
 
@@ -83,7 +84,7 @@ func (kg *DefaultKeyGenerator) ValidateKey(key string) error {
 
 	// Check maximum key length (Redis has a 512MB limit, but we'll be more conservative)
 	if len(key) > 250 {
-		return fmt.Errorf("key exceeds maximum length of 250 characters: %s", key)
+		return fmt.Errorf("key exceeds maximum length of 250 characters")
 	}
 
 	// Validate specific key patterns

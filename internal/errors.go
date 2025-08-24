@@ -499,9 +499,11 @@ func (cb *CircuitBreaker) CanExecute() error {
 			cb.state = CircuitBreakerHalfOpen
 			cb.halfOpenCalls = 0
 			cb.successCount = 0
-			return nil
+			// Fall through to half-open logic
+		} else {
+			return NewCircuitOpenError("circuit breaker is open")
 		}
-		return NewCircuitOpenError("circuit breaker is open")
+		fallthrough
 	case CircuitBreakerHalfOpen:
 		if cb.halfOpenCalls >= cb.config.MaxHalfOpenCalls {
 			return NewCircuitOpenError("circuit breaker half-open call limit exceeded")

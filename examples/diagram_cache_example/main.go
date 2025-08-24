@@ -9,7 +9,28 @@ import (
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
 )
 
+// Example PlantUML diagram content
+const samplePUMLDiagram = `@startuml
+!define PUML_VERSION 1.2024.8
+
+state "Idle" as idle
+state "Processing" as processing
+state "Complete" as complete
+state "Error" as error
+
+[*] --> idle
+idle --> processing : start
+processing --> complete : success
+processing --> error : failure
+complete --> [*]
+error --> idle : retry
+@enduml`
+
 func main() {
+	fmt.Println("=== Redis Cache Diagram Example ===")
+	fmt.Println("This example demonstrates caching PlantUML diagrams")
+	fmt.Println()
+
 	// Create Redis cache configuration
 	config := cache.DefaultRedisConfig()
 	config.RedisAddr = "localhost:6379"
@@ -20,114 +41,98 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create Redis cache: %v", err)
 	}
-	defer redisCache.Close()
+	defer func() {
+		if err := redisCache.Close(); err != nil {
+			log.Printf("Error closing cache: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 
 	// Test Redis connection
+	fmt.Println("1. Testing Redis connection...")
 	if err := redisCache.Health(ctx); err != nil {
 		log.Fatalf("Redis health check failed: %v", err)
 	}
 	fmt.Println("✓ Redis connection successful")
+	fmt.Println()
 
-	// Example PlantUML diagram content
-	diagramName := "user-authentication-flow"
-	pumlContent := `@startuml
-title User Authentication State Machine
+	// Store a diagram
+	diagramName := "simple-state-machine"
+	fmt.Printf("2. Storing diagram '%s'...\n", diagramName)
 
-[*] --> Unauthenticated
-Unauthenticated --> Authenticating : login()
-Authenticating --> Authenticated : success
-Authenticating --> Unauthenticated : failure
-Authenticated --> Unauthenticated : logout()
-Authenticated --> [*]
-
-@enduml`
-
-	// Store the diagram with TTL
-	fmt.Printf("Storing diagram '%s'...\n", diagramName)
-	err = redisCache.StoreDiagram(ctx, diagramName, pumlContent, 30*time.Minute)
+	err = redisCache.StoreDiagram(ctx, diagramName, samplePUMLDiagram, 30*time.Minute)
 	if err != nil {
 		log.Fatalf("Failed to store diagram: %v", err)
 	}
 	fmt.Println("✓ Diagram stored successfully")
+	fmt.Println()
 
 	// Retrieve the diagram
-	fmt.Printf("Retrieving diagram '%s'...\n", diagramName)
-	retrievedContent, err := redisCache.GetDiagram(ctx, diagramName)
+	fmt.Printf("3. Retrieving diagram '%s'...\n", diagramName)
+	retrievedDiagram, err := redisCache.GetDiagram(ctx, diagramName)
 	if err != nil {
 		log.Fatalf("Failed to retrieve diagram: %v", err)
 	}
 	fmt.Println("✓ Diagram retrieved successfully")
+	fmt.Printf("Retrieved content length: %d characters\n", len(retrievedDiagram))
+	fmt.Println()
 
 	// Verify content matches
-	if retrievedContent == pumlContent {
-		fmt.Println("✓ Retrieved content matches original")
+	fmt.Println("4. Verifying diagram content...")
+	if retrievedDiagram == samplePUMLDiagram {
+		fmt.Println("✓ Content matches original")
 	} else {
 		fmt.Println("✗ Content mismatch!")
-		fmt.Printf("Original length: %d\n", len(pumlContent))
-		fmt.Printf("Retrieved length: %d\n", len(retrievedContent))
+		fmt.Printf("Expected length: %d, Got length: %d\n", len(samplePUMLDiagram), len(retrievedDiagram))
 	}
+	fmt.Println()
 
-	// Display retrieved content
-	fmt.Println("\nRetrieved PlantUML content:")
-	fmt.Println("---")
-	fmt.Println(retrievedContent)
-	fmt.Println("---")
-
-	// Test diagram with special characters in name
-	specialDiagramName := "order/processing-flow_v2.1"
-	specialContent := `@startuml
-state "Order Received" as OR
-state "Processing" as P
-state "Completed" as C
-
-OR --> P : validate()
-P --> C : process()
-@enduml`
-
-	fmt.Printf("\nStoring diagram with special characters: '%s'...\n", specialDiagramName)
-	err = redisCache.StoreDiagram(ctx, specialDiagramName, specialContent, time.Hour)
+	// Demonstrate error handling - try to get non-existent diagram
+	fmt.Println("5. Testing error handling with non-existent diagram...")
+	_, err = redisCache.GetDiagram(ctx, "non-existent-diagram")
 	if err != nil {
-		log.Fatalf("Failed to store special diagram: %v", err)
+		if cache.IsNotFoundError(err) {
+			fmt.Println("✓ Correctly handled not found error")
+		} else {
+			fmt.Printf("✗ Unexpected error type: %v\n", err)
+		}
+	} else {
+		fmt.Println("✗ Expected error but got none")
 	}
-	fmt.Println("✓ Special diagram stored successfully")
+	fmt.Println()
 
-	// Retrieve the special diagram
-	retrievedSpecial, err := redisCache.GetDiagram(ctx, specialDiagramName)
+	// Demonstrate cleanup operations
+	fmt.Println("6. Testing cleanup operations...")
+
+	// Store multiple diagrams for cleanup demo
+	testDiagrams := []string{"test-diagram-1", "test-diagram-2", "test-diagram-3"}
+	for _, name := range testDiagrams {
+		err := redisCache.StoreDiagram(ctx, name, samplePUMLDiagram, 5*time.Minute)
+		if err != nil {
+			log.Printf("Warning: Failed to store test diagram %s: %v", name, err)
+		}
+	}
+
+	// Clean up test diagrams using pattern
+	fmt.Println("Cleaning up test diagrams...")
+	err = redisCache.Cleanup(ctx, "/diagrams/puml/test-diagram-*")
 	if err != nil {
-		log.Fatalf("Failed to retrieve special diagram: %v", err)
+		log.Printf("Warning: Cleanup failed: %v", err)
+	} else {
+		fmt.Println("✓ Cleanup completed successfully")
 	}
-	fmt.Println("✓ Special diagram retrieved successfully")
+	fmt.Println()
 
-	// Verify special content matches
-	if retrievedSpecial == specialContent {
-		fmt.Println("✓ Special diagram content matches original")
-	}
-
-	// Clean up - delete the diagrams
-	fmt.Println("\nCleaning up...")
+	// Final cleanup - delete the main example diagram
+	fmt.Printf("7. Cleaning up example diagram '%s'...\n", diagramName)
 	err = redisCache.DeleteDiagram(ctx, diagramName)
 	if err != nil {
-		log.Printf("Warning: Failed to delete diagram '%s': %v", diagramName, err)
+		log.Printf("Warning: Failed to delete diagram: %v", err)
 	} else {
-		fmt.Printf("✓ Deleted diagram '%s'\n", diagramName)
+		fmt.Println("✓ Example diagram deleted successfully")
 	}
 
-	err = redisCache.DeleteDiagram(ctx, specialDiagramName)
-	if err != nil {
-		log.Printf("Warning: Failed to delete diagram '%s': %v", specialDiagramName, err)
-	} else {
-		fmt.Printf("✓ Deleted diagram '%s'\n", specialDiagramName)
-	}
-
-	// Verify deletion
-	_, err = redisCache.GetDiagram(ctx, diagramName)
-	if err != nil && cache.IsNotFoundError(err) {
-		fmt.Printf("✓ Confirmed diagram '%s' was deleted\n", diagramName)
-	} else {
-		fmt.Printf("✗ Diagram '%s' still exists or unexpected error: %v\n", diagramName, err)
-	}
-
-	fmt.Println("\nDiagram cache example completed successfully!")
+	fmt.Println()
+	fmt.Println("=== Diagram Cache Example Complete ===")
 }
