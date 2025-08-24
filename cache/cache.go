@@ -1,3 +1,108 @@
+// Package cache provides a comprehensive Redis-based caching system for PlantUML diagrams
+// and UML state machine definitions with enterprise-grade reliability features.
+//
+// This package implements a hierarchical caching layer that supports:
+//   - PlantUML diagram storage and retrieval with configurable TTL
+//   - Parsed UML state machine caching with version management
+//   - Individual state machine entity caching with referential integrity
+//   - Comprehensive error handling with typed errors and recovery strategies
+//   - Configurable retry logic with exponential backoff and circuit breakers
+//   - Health monitoring, diagnostics, and performance metrics
+//   - Thread-safe concurrent access with connection pooling
+//   - Security-focused input validation and sanitization
+//
+// # Key Structure
+//
+// The cache uses a hierarchical key structure in Redis:
+//   - PlantUML Diagrams: /diagrams/puml/<diagram_name>
+//   - Parsed State Machines: /machines/<uml_version>/<diagram_name>
+//   - State Machine Entities: /machines/<uml_version>/<diagram_name>/entities/<entity_id>
+//
+// # Basic Usage
+//
+//	config := cache.DefaultRedisConfig()
+//	config.RedisAddr = "localhost:6379"
+//
+//	redisCache, err := cache.NewRedisCache(config)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer redisCache.Close()
+//
+//	ctx := context.Background()
+//
+//	// Store and retrieve diagrams
+//	err = redisCache.StoreDiagram(ctx, "my-diagram", pumlContent, time.Hour)
+//	content, err := redisCache.GetDiagram(ctx, "my-diagram")
+//
+// # Error Handling
+//
+// The package provides comprehensive error handling with typed errors:
+//
+//	_, err := redisCache.GetDiagram(ctx, "nonexistent")
+//	if err != nil {
+//	    switch {
+//	    case cache.IsNotFoundError(err):
+//	        // Handle cache miss
+//	    case cache.IsConnectionError(err):
+//	        // Handle Redis connection issues
+//	    case cache.IsValidationError(err):
+//	        // Handle input validation errors
+//	    }
+//	}
+//
+// # Health Monitoring
+//
+//	// Basic health check
+//	err = redisCache.Health(ctx)
+//
+//	// Detailed health status
+//	health, err := redisCache.HealthDetailed(ctx)
+//	fmt.Printf("Status: %s, Response Time: %v\n", health.Status, health.ResponseTime)
+//
+// # API Separation
+//
+// This package provides the public API for the cache system. Internal implementation
+// details are in the internal package and should not be used directly by applications.
+//
+// Public API (this package):
+//   - Cache interface and RedisCache implementation
+//   - Configuration types (RedisConfig, RedisRetryConfig)
+//   - Error types and utility functions
+//   - Health monitoring and cleanup types
+//
+// Internal API (internal package):
+//   - Low-level Redis client wrapper
+//   - Key generation and validation
+//   - Input validation and sanitization
+//   - Error recovery and circuit breaker implementation
+//
+// # Thread Safety
+//
+// All operations are thread-safe and support concurrent access from multiple goroutines.
+// The library handles internal synchronization and connection pooling automatically.
+//
+// # Performance
+//
+// The library is optimized for high-performance scenarios with:
+//   - Connection pooling for efficient Redis connections
+//   - Batch operations for bulk deletions
+//   - Configurable timeouts and retry policies
+//   - Memory usage monitoring and optimization
+//
+// # Security
+//
+// The library includes comprehensive security measures:
+//   - Input validation and sanitization for all parameters
+//   - SQL injection and XSS pattern detection
+//   - Path traversal prevention
+//   - Safe key generation with proper encoding
+//
+// For complete documentation, examples, and configuration guides, see:
+//   - README.md - Comprehensive usage guide
+//   - API.md - Complete API reference
+//   - CONFIGURATION.md - Configuration and tuning guide
+//   - examples/ directory - Working code examples
 package cache
 
 import (
