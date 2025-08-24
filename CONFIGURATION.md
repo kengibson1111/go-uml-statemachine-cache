@@ -395,6 +395,270 @@ if len(diagnostics.Recommendations) > 0 {
 }
 ```
 
+## Cross-Platform Configuration
+
+### Platform-Specific Redis Setup
+
+#### Windows Configuration
+
+**Redis Configuration File Location:**
+- Chocolatey install: `C:\ProgramData\chocolatey\lib\redis-64\tools\redis.windows.conf`
+- Manual install: `C:\Program Files\Redis\redis.windows.conf`
+
+**Windows Service Management:**
+```cmd
+# Start Redis service
+net start Redis
+
+# Stop Redis service
+net stop Redis
+
+# Check service status
+sc query Redis
+```
+
+**Windows-Specific Redis Config:**
+```conf
+# redis.windows.conf
+bind 127.0.0.1
+port 6379
+timeout 0
+tcp-keepalive 60
+loglevel notice
+logfile "C:/Program Files/Redis/Logs/redis_log.txt"
+databases 16
+save 900 1
+save 300 10
+save 60 10000
+dir "C:/Program Files/Redis/Data/"
+```
+
+#### Linux Configuration
+
+**Redis Configuration File Location:**
+- Ubuntu/Debian: `/etc/redis/redis.conf`
+- CentOS/RHEL: `/etc/redis.conf`
+- Arch Linux: `/etc/redis/redis.conf`
+
+**Linux Service Management:**
+```bash
+# SystemD (modern distributions)
+sudo systemctl start redis-server
+sudo systemctl stop redis-server
+sudo systemctl restart redis-server
+sudo systemctl status redis-server
+sudo systemctl enable redis-server  # Auto-start on boot
+
+# SysV Init (older distributions)
+sudo service redis-server start
+sudo service redis-server stop
+sudo service redis-server restart
+sudo service redis-server status
+```
+
+**Linux-Specific Redis Config:**
+```conf
+# /etc/redis/redis.conf
+bind 127.0.0.1
+port 6379
+timeout 0
+tcp-keepalive 300
+daemonize yes
+supervised systemd
+pidfile /var/run/redis/redis-server.pid
+loglevel notice
+logfile /var/log/redis/redis-server.log
+databases 16
+dir /var/lib/redis
+```
+
+#### macOS Configuration
+
+**Redis Configuration File Location:**
+- Homebrew: `/usr/local/etc/redis.conf` or `/opt/homebrew/etc/redis.conf` (Apple Silicon)
+- MacPorts: `/opt/local/etc/redis/redis.conf`
+
+**macOS Service Management:**
+```bash
+# Homebrew services
+brew services start redis
+brew services stop redis
+brew services restart redis
+brew services list | grep redis
+
+# Manual start (Homebrew)
+redis-server /usr/local/etc/redis.conf
+
+# MacPorts
+sudo port load redis
+sudo port unload redis
+```
+
+**macOS-Specific Redis Config:**
+```conf
+# /usr/local/etc/redis.conf (Homebrew)
+bind 127.0.0.1
+port 6379
+timeout 0
+tcp-keepalive 300
+daemonize no  # Homebrew manages this
+loglevel notice
+logfile /usr/local/var/log/redis.log
+databases 16
+dir /usr/local/var/db/redis/
+```
+
+### Environment Variables by Platform
+
+#### Windows Environment Variables
+
+**Command Prompt:**
+```cmd
+set REDIS_ADDR=localhost:6379
+set REDIS_PASSWORD=your-password
+set REDIS_DB=0
+set REDIS_POOL_SIZE=10
+set REDIS_TIMEOUT=5s
+```
+
+**PowerShell:**
+```powershell
+$env:REDIS_ADDR="localhost:6379"
+$env:REDIS_PASSWORD="your-password"
+$env:REDIS_DB="0"
+$env:REDIS_POOL_SIZE="10"
+$env:REDIS_TIMEOUT="5s"
+```
+
+**Windows Registry (System-wide):**
+```cmd
+setx REDIS_ADDR "localhost:6379" /M
+setx REDIS_PASSWORD "your-password" /M
+```
+
+#### Linux/macOS Environment Variables
+
+**Bash/Zsh:**
+```bash
+export REDIS_ADDR=localhost:6379
+export REDIS_PASSWORD=your-password
+export REDIS_DB=0
+export REDIS_POOL_SIZE=10
+export REDIS_TIMEOUT=5s
+```
+
+**System-wide (Linux):**
+```bash
+# Add to /etc/environment
+echo 'REDIS_ADDR=localhost:6379' | sudo tee -a /etc/environment
+echo 'REDIS_PASSWORD=your-password' | sudo tee -a /etc/environment
+```
+
+**User Profile (macOS):**
+```bash
+# Add to ~/.zshrc or ~/.bash_profile
+echo 'export REDIS_ADDR=localhost:6379' >> ~/.zshrc
+echo 'export REDIS_PASSWORD=your-password' >> ~/.zshrc
+```
+
+### Docker Configuration (Cross-Platform)
+
+#### Basic Docker Setup
+```bash
+# Run Redis container
+docker run --name redis-cache -p 6379:6379 -d redis:latest
+
+# Run with password
+docker run --name redis-cache -p 6379:6379 -d redis:latest redis-server --requirepass your-password
+
+# Run with custom config
+docker run --name redis-cache -p 6379:6379 -v /path/to/redis.conf:/usr/local/etc/redis/redis.conf -d redis:latest redis-server /usr/local/etc/redis/redis.conf
+```
+
+#### Docker Compose Configuration
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  redis:
+    image: redis:latest
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_PASSWORD=your-password
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+```
+
+### Go Application Configuration by Platform
+
+#### Cross-Platform Configuration Loading
+```go
+package main
+
+import (
+    "os"
+    "runtime"
+    "path/filepath"
+    "time"
+    "github.com/kengibson1111/go-uml-statemachine-cache/cache"
+)
+
+func getConfigPath() string {
+    switch runtime.GOOS {
+    case "windows":
+        return filepath.Join(os.Getenv("APPDATA"), "myapp", "config.json")
+    case "darwin":
+        return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "myapp", "config.json")
+    default: // Linux and others
+        configDir := os.Getenv("XDG_CONFIG_HOME")
+        if configDir == "" {
+            configDir = filepath.Join(os.Getenv("HOME"), ".config")
+        }
+        return filepath.Join(configDir, "myapp", "config.json")
+    }
+}
+
+func createPlatformOptimizedConfig() *cache.RedisConfig {
+    config := cache.DefaultRedisConfig()
+    
+    // Platform-specific optimizations
+    switch runtime.GOOS {
+    case "windows":
+        // Windows-specific settings
+        config.DialTimeout = 10 * time.Second  // Longer timeout for Windows
+        config.PoolSize = 15                   // Slightly larger pool
+        
+    case "darwin":
+        // macOS-specific settings
+        config.DialTimeout = 5 * time.Second
+        config.PoolSize = 10
+        
+    default: // Linux
+        // Linux-specific settings
+        config.DialTimeout = 3 * time.Second   // Faster on Linux
+        config.PoolSize = 20                   // Can handle more connections
+    }
+    
+    // Load from environment variables
+    if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+        config.RedisAddr = addr
+    }
+    if password := os.Getenv("REDIS_PASSWORD"); password != "" {
+        config.RedisPassword = password
+    }
+    
+    return config
+}
+```
+
 ## Environment-Specific Settings
 
 ### Development Environment
@@ -641,11 +905,48 @@ redisCache.GetDiagram = func(ctx context.Context, name string) (string, error) {
 
 #### Monitor Redis Directly
 
-```bash
-# Connect to Redis CLI (Windows)
+#### Cross-Platform Redis CLI Access
+
+**Windows:**
+```cmd
+# Using Redis CLI (if installed via Chocolatey)
 redis-cli -h localhost -p 6379
 
-# Monitor commands
+# Using Docker
+docker exec -it redis-cache redis-cli
+
+# Using WSL
+wsl redis-cli -h localhost -p 6379
+```
+
+**Linux:**
+```bash
+# Using system Redis CLI
+redis-cli -h localhost -p 6379
+
+# Using Docker
+docker exec -it redis-cache redis-cli
+
+# Remote connection
+redis-cli -h redis.example.com -p 6379 -a your-password
+```
+
+**macOS:**
+```bash
+# Using Homebrew Redis CLI
+redis-cli -h localhost -p 6379
+
+# Using Docker
+docker exec -it redis-cache redis-cli
+
+# Using MacPorts
+/opt/local/bin/redis-cli -h localhost -p 6379
+```
+
+#### Common Redis CLI Commands
+
+```bash
+# Monitor all commands
 MONITOR
 
 # Check memory usage
@@ -656,6 +957,12 @@ KEYS /diagrams/puml/*
 
 # Check key TTL
 TTL /diagrams/puml/my-diagram
+
+# Get Redis configuration
+CONFIG GET *
+
+# Check Redis version
+INFO server
 ```
 
 #### Performance Profiling

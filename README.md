@@ -309,9 +309,11 @@ fmt.Printf("  Entities: %d\n", sizeInfo.EntityCount)
 fmt.Printf("  Memory Used: %d bytes\n", sizeInfo.MemoryUsed)
 ```
 
-## Windows-Specific Setup and Usage
+## Platform-Specific Setup and Usage
 
-### Redis Installation on Windows
+### Redis Installation
+
+#### Windows
 
 1. **Using Chocolatey** (recommended):
    ```cmd
@@ -332,26 +334,92 @@ fmt.Printf("  Memory Used: %d bytes\n", sizeInfo.MemoryUsed)
    docker run --name redis-cache -p 6379:6379 -d redis:latest
    ```
 
-### Running Examples on Windows
+#### Linux (Ubuntu/Debian)
 
-Navigate to the project directory and run examples using Go directly:
+1. **Using APT package manager**:
+   ```bash
+   sudo apt update
+   sudo apt install redis-server
+   sudo systemctl start redis-server
+   sudo systemctl enable redis-server
+   ```
 
+2. **Using Snap**:
+   ```bash
+   sudo snap install redis
+   ```
+
+3. **From source** (for latest version):
+   ```bash
+   wget http://download.redis.io/redis-stable.tar.gz
+   tar xvzf redis-stable.tar.gz
+   cd redis-stable
+   make
+   sudo make install
+   ```
+
+#### Linux (CentOS/RHEL/Fedora)
+
+1. **Using DNF/YUM**:
+   ```bash
+   # Fedora
+   sudo dnf install redis
+   
+   # CentOS/RHEL (with EPEL)
+   sudo yum install epel-release
+   sudo yum install redis
+   
+   # Start and enable service
+   sudo systemctl start redis
+   sudo systemctl enable redis
+   ```
+
+#### macOS
+
+1. **Using Homebrew** (recommended):
+   ```bash
+   brew install redis
+   brew services start redis
+   ```
+
+2. **Using MacPorts**:
+   ```bash
+   sudo port install redis
+   sudo port load redis
+   ```
+
+3. **Using Docker**:
+   ```bash
+   docker run --name redis-cache -p 6379:6379 -d redis:latest
+   ```
+
+### Running Examples
+
+#### Windows
 ```cmd
 # Navigate to project directory
 cd go-uml-statemachine-cache
 
-# Run diagram caching example
+# Run examples
 go run examples\diagram_cache_example\main.go
-
-# Run state machine caching example
 go run examples\state_machine_cache_example\main.go
-
-# Run health monitoring example
 go run examples\health_monitoring_example\main.go
 ```
 
-### Testing on Windows
+#### Linux/macOS
+```bash
+# Navigate to project directory
+cd go-uml-statemachine-cache
 
+# Run examples
+go run examples/diagram_cache_example/main.go
+go run examples/state_machine_cache_example/main.go
+go run examples/health_monitoring_example/main.go
+```
+
+### Testing
+
+#### Windows
 ```cmd
 # Run unit tests (no Redis required)
 go test .\cache -v
@@ -366,8 +434,24 @@ go test -cover .\cache .\internal
 go test -run TestRedisCache_StoreDiagram .\cache -v
 ```
 
-### Building on Windows
+#### Linux/macOS
+```bash
+# Run unit tests (no Redis required)
+go test ./cache -v
 
+# Run integration tests (requires Redis running)
+go test ./test/integration -v
+
+# Run all tests with coverage
+go test -cover ./cache ./internal
+
+# Run specific test
+go test -run TestRedisCache_StoreDiagram ./cache -v
+```
+
+### Building
+
+#### Windows
 ```cmd
 # Build the library
 go build .\cache
@@ -379,6 +463,115 @@ go build -o statemachine_example.exe .\examples\state_machine_cache_example
 # Run built examples
 .\diagram_example.exe
 .\statemachine_example.exe
+```
+
+#### Linux/macOS
+```bash
+# Build the library
+go build ./cache
+
+# Build examples
+go build -o diagram_example ./examples/diagram_cache_example
+go build -o statemachine_example ./examples/state_machine_cache_example
+
+# Run built examples
+./diagram_example
+./statemachine_example
+```
+
+### Platform-Specific Considerations
+
+#### File Paths
+The library automatically handles path separators across platforms. However, when working with examples or custom implementations:
+
+- **Windows**: Use backslashes (`\`) or forward slashes (`/`) in paths
+- **Linux/macOS**: Use forward slashes (`/`) in paths
+
+#### Redis Configuration Files
+
+#### Windows
+Default Redis config location: `C:\Program Files\Redis\redis.windows.conf`
+
+```cmd
+# Edit Redis config
+notepad "C:\Program Files\Redis\redis.windows.conf"
+
+# Restart Redis service
+net stop Redis
+net start Redis
+```
+
+#### Linux
+Default Redis config location: `/etc/redis/redis.conf`
+
+```bash
+# Edit Redis config
+sudo nano /etc/redis/redis.conf
+
+# Restart Redis service
+sudo systemctl restart redis-server
+```
+
+#### macOS
+Default Redis config location: `/usr/local/etc/redis.conf` (Homebrew)
+
+```bash
+# Edit Redis config
+nano /usr/local/etc/redis.conf
+
+# Restart Redis service
+brew services restart redis
+```
+
+### Environment Variables
+
+Set Redis connection details using environment variables across platforms:
+
+#### Windows (Command Prompt)
+```cmd
+set REDIS_ADDR=localhost:6379
+set REDIS_PASSWORD=your-password
+go run your-app.go
+```
+
+#### Windows (PowerShell)
+```powershell
+$env:REDIS_ADDR="localhost:6379"
+$env:REDIS_PASSWORD="your-password"
+go run your-app.go
+```
+
+#### Linux/macOS (Bash)
+```bash
+export REDIS_ADDR=localhost:6379
+export REDIS_PASSWORD=your-password
+go run your-app.go
+```
+
+#### Using .env files (cross-platform)
+Create a `.env` file in your project root:
+```
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=your-password
+REDIS_DB=0
+```
+
+Then load it in your Go application:
+```go
+// Using godotenv package
+import "github.com/joho/godotenv"
+
+func init() {
+    if err := godotenv.Load(); err != nil {
+        log.Println("No .env file found")
+    }
+}
+
+config := &cache.RedisConfig{
+    RedisAddr:     os.Getenv("REDIS_ADDR"),
+    RedisPassword: os.Getenv("REDIS_PASSWORD"),
+    RedisDB:       getEnvAsInt("REDIS_DB", 0),
+}
 ```
 
 ## Examples and Documentation
@@ -566,8 +759,9 @@ Contributions are welcome! Please follow these guidelines:
 5. **Test on Windows** if making platform-specific changes
 6. **Submit a pull request** with a clear description
 
-### Development Setup on Windows
+### Development Setup
 
+#### Windows
 ```cmd
 # Clone the repository
 git clone https://github.com/kengibson1111/go-uml-statemachine-cache.git
@@ -584,6 +778,46 @@ choco install redis-64
 
 # Run integration tests
 go test .\test\integration -v
+```
+
+#### Linux
+```bash
+# Clone the repository
+git clone https://github.com/kengibson1111/go-uml-statemachine-cache.git
+cd go-uml-statemachine-cache
+
+# Install dependencies
+go mod download
+
+# Run tests
+go test ./cache -v
+
+# Install Redis for integration tests (Ubuntu/Debian)
+sudo apt update && sudo apt install redis-server
+sudo systemctl start redis-server
+
+# Run integration tests
+go test ./test/integration -v
+```
+
+#### macOS
+```bash
+# Clone the repository
+git clone https://github.com/kengibson1111/go-uml-statemachine-cache.git
+cd go-uml-statemachine-cache
+
+# Install dependencies
+go mod download
+
+# Run tests
+go test ./cache -v
+
+# Install Redis for integration tests
+brew install redis
+brew services start redis
+
+# Run integration tests
+go test ./test/integration -v
 ```
 
 ## License
