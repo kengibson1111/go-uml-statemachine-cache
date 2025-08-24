@@ -838,31 +838,41 @@ func TestContextValidation_Comprehensive(t *testing.T) {
 				description: "TODO context should be accepted",
 			},
 			{
-				name:        "context with timeout",
-				ctx:         func() context.Context { ctx, _ := context.WithTimeout(context.Background(), time.Hour); return ctx }(),
+				name: "context with timeout",
+				ctx: func() context.Context {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+					cancel()
+					return ctx
+				}(),
 				expectError: false,
 				description: "context with timeout should be accepted",
 			},
 			{
 				name: "context with deadline",
 				ctx: func() context.Context {
-					ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
+					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
+					cancel()
 					return ctx
 				}(),
 				expectError: false,
 				description: "context with deadline should be accepted",
 			},
 			{
-				name:        "cancelled context",
-				ctx:         func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }(),
+				name: "cancelled context",
+				ctx: func() context.Context {
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+					return ctx
+				}(),
 				expectError: true,
 				description: "cancelled context should be rejected",
 			},
 			{
 				name: "expired context",
 				ctx: func() context.Context {
-					ctx, _ := context.WithTimeout(context.Background(), time.Nanosecond)
+					ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 					time.Sleep(time.Millisecond)
+					cancel()
 					return ctx
 				}(),
 				expectError: true,
