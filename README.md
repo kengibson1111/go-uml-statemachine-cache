@@ -33,7 +33,6 @@ go get github.com/kengibson1111/go-uml-statemachine-cache
 
 - Go 1.24.4 or later
 - Redis 6.0 or later
-- Windows 10/11 or Windows Server 2019/2022 (for Windows users)
 
 ## Quick Start
 
@@ -579,15 +578,15 @@ config := &cache.RedisConfig{
 The repository includes comprehensive examples demonstrating all features:
 
 ### Public API Examples
-- **`examples\diagram_cache_example\`** - Basic diagram caching operations with error handling
-- **`examples\state_machine_cache_example\`** - State machine and entity caching workflows
-- **`examples\health_monitoring_example\`** - Health monitoring and diagnostics
-- **`examples\cleanup_example\`** - Cache cleanup and management operations
-- **`examples\error_handling_example\`** - Comprehensive error handling patterns
+- **`examples/diagram_cache_example/`** - Basic diagram caching operations with error handling
+- **`examples/state_machine_cache_example/`** - State machine and entity caching workflows
+- **`examples/health_monitoring_example/`** - Health monitoring and diagnostics
+- **`examples/cleanup_example/`** - Cache cleanup and management operations
+- **`examples/error_handling_example/`** - Comprehensive error handling patterns
 
 ### Internal API Examples (for library developers)
-- **`internal\examples\redis_client_example\`** - Low-level Redis client usage
-- **`internal\examples\retry_example\`** - Retry mechanism and circuit breaker demonstration
+- **`internal/examples/redis_client_example/`** - Low-level Redis client usage
+- **`internal/examples/retry_example/`** - Retry mechanism and circuit breaker demonstration
 
 ## API Reference
 
