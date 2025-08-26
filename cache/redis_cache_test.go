@@ -2,9 +2,11 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		content     string
 		ttl         time.Duration
@@ -24,30 +27,33 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 	}{
 		{
 			name:        "valid diagram storage",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "@startuml\nstate A\nstate B\nA --> B\n@enduml",
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test-diagram").Return("/diagrams/puml/test-diagram")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram").Return(nil)
-				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour).Return(nil)
+				mockKeyGen.On("DiagramKey", "test-diagram").Return(fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String()), "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour).Return(nil)
 			},
 		},
 		{
 			name:        "valid diagram with default TTL",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram-default-ttl",
 			content:     "@startuml\nstate X\nstate Y\nX --> Y\n@enduml",
 			ttl:         0, // Should use default TTL
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test-diagram-default-ttl").Return("/diagrams/puml/test-diagram-default-ttl")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram-default-ttl").Return(nil)
-				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram-default-ttl", "@startuml\nstate X\nstate Y\nX --> Y\n@enduml", time.Hour).Return(nil)
+				mockKeyGen.On("DiagramKey", "test-diagram-default-ttl").Return(fmt.Sprintf("/diagrams/%s/test-diagram-default-ttl", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-diagram-default-ttl", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test-diagram-default-ttl", models.DiagramTypePUML.String()), "@startuml\nstate X\nstate Y\nX --> Y\n@enduml", time.Hour).Return(nil)
 			},
 		},
 		{
 			name:        "empty diagram name",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
@@ -59,6 +65,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "empty content",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "empty-content",
 			content:     "",
 			ttl:         time.Hour,
@@ -70,14 +77,15 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "diagram with special characters",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test/diagram-with-special_chars.puml",
 			content:     "@startuml\nstate \"State with spaces\"\n@enduml",
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test-diagram-with-special_chars.puml").Return("/diagrams/puml/test-diagram-with-special_chars.puml")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram-with-special_chars.puml").Return(nil)
-				mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram-with-special_chars.puml", "@startuml\nstate \"State with spaces\"\n@enduml", time.Hour).Return(nil)
+				mockKeyGen.On("DiagramKey", "test-diagram-with-special_chars.puml").Return(fmt.Sprintf("/diagrams/%s/test-diagram-with-special_chars.puml", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-diagram-with-special_chars.puml", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test-diagram-with-special_chars.puml", models.DiagramTypePUML.String()), "@startuml\nstate \"State with spaces\"\n@enduml", time.Hour).Return(nil)
 			},
 		},
 	}
@@ -92,7 +100,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-			err := cache.StoreDiagram(ctx, tt.diagramName, tt.content, tt.ttl)
+			err := cache.StoreDiagram(ctx, tt.diagramType, tt.diagramName, tt.content, tt.ttl)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -116,6 +124,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		expectError bool
 		errorType   CacheErrorType
@@ -124,28 +133,31 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 	}{
 		{
 			name:        "retrieve existing diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-get-diagram",
 			expectError: false,
 			expected:    "@startuml\nstate A\nstate B\nA --> B\n@enduml",
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test-get-diagram").Return("/diagrams/puml/test-get-diagram")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-get-diagram").Return(nil)
-				mockClient.On("GetWithRetry", ctx, "/diagrams/puml/test-get-diagram").Return("@startuml\nstate A\nstate B\nA --> B\n@enduml", nil)
+				mockKeyGen.On("DiagramKey", "test-get-diagram").Return(fmt.Sprintf("/diagrams/%s/test-get-diagram", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-get-diagram", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test-get-diagram", models.DiagramTypePUML.String())).Return("@startuml\nstate A\nstate B\nA --> B\n@enduml", nil)
 			},
 		},
 		{
 			name:        "retrieve non-existent diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "non-existent-diagram",
 			expectError: true,
 			errorType:   CacheErrorTypeNotFound,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return("/diagrams/puml/non-existent-diagram")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/non-existent-diagram").Return(nil)
-				mockClient.On("GetWithRetry", ctx, "/diagrams/puml/non-existent-diagram").Return("", redis.Nil)
+				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return(fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String())).Return("", redis.Nil)
 			},
 		},
 		{
 			name:        "empty diagram name",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			expectError: true,
 			errorType:   CacheErrorTypeValidation,
@@ -165,7 +177,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-			content, err := cache.GetDiagram(ctx, tt.diagramName)
+			content, err := cache.GetDiagram(ctx, tt.diagramType, tt.diagramName)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -191,6 +203,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		expectError bool
 		errorType   CacheErrorType
@@ -198,26 +211,29 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 	}{
 		{
 			name:        "delete existing diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-delete-diagram",
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "test-delete-diagram").Return("/diagrams/puml/test-delete-diagram")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test-delete-diagram").Return(nil)
-				mockClient.On("DelWithRetry", ctx, []string{"/diagrams/puml/test-delete-diagram"}).Return(nil)
+				mockKeyGen.On("DiagramKey", "test-delete-diagram").Return(fmt.Sprintf("/diagrams/%s/test-delete-diagram", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-delete-diagram", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("DelWithRetry", ctx, []string{fmt.Sprintf("/diagrams/%s/test-delete-diagram", models.DiagramTypePUML.String())}).Return(nil)
 			},
 		},
 		{
 			name:        "delete non-existent diagram (should not error)",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "non-existent-diagram",
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
-				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return("/diagrams/puml/non-existent-diagram")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/non-existent-diagram").Return(nil)
-				mockClient.On("DelWithRetry", ctx, []string{"/diagrams/puml/non-existent-diagram"}).Return(nil)
+				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return(fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("DelWithRetry", ctx, []string{fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String())}).Return(nil)
 			},
 		},
 		{
 			name:        "empty diagram name",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			expectError: true,
 			errorType:   CacheErrorTypeValidation,
@@ -237,7 +253,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-			err := cache.DeleteDiagram(ctx, tt.diagramName)
+			err := cache.DeleteDiagram(ctx, tt.diagramType, tt.diagramName)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -268,7 +284,7 @@ func TestRedisCache_KeyValidationError(t *testing.T) {
 
 	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-	err := cache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
 	require.Error(t, err)
 	cacheErr, ok := err.(*CacheError)
@@ -285,13 +301,13 @@ func TestRedisCache_RedisConnectionError(t *testing.T) {
 	config := &RedisConfig{DefaultTTL: time.Hour}
 
 	// Setup mocks for successful key generation but Redis connection error
-	mockKeyGen.On("DiagramKey", "test-diagram").Return("/diagrams/puml/test-diagram")
-	mockKeyGen.On("ValidateKey", "/diagrams/puml/test-diagram").Return(nil)
-	mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test-diagram", "@startuml\nstate A\n@enduml", time.Hour).Return(assert.AnError)
+	mockKeyGen.On("DiagramKey", "test-diagram").Return(fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String()))
+	mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String())).Return(nil)
+	mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String()), "@startuml\nstate A\n@enduml", time.Hour).Return(assert.AnError)
 
 	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-	err := cache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to store diagram")

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 // TestConfig_Comprehensive tests comprehensive configuration scenarios
@@ -383,7 +385,7 @@ func TestKeyGenerator_ComprehensiveEdgeCases(t *testing.T) {
 		}{
 			{
 				name:        "diagram key with very long name",
-				keyFunc:     func() string { return kg.DiagramKey(strings.Repeat("a", 200)) },
+				keyFunc:     func() string { return kg.DiagramKey(models.DiagramTypePUML, strings.Repeat("a", 200)) },
 				description: "very long diagram name should be handled",
 			},
 			{
@@ -398,7 +400,7 @@ func TestKeyGenerator_ComprehensiveEdgeCases(t *testing.T) {
 			},
 			{
 				name:        "diagram key with empty string",
-				keyFunc:     func() string { return kg.DiagramKey("") },
+				keyFunc:     func() string { return kg.DiagramKey(models.DiagramTypePUML, "") },
 				description: "empty string should be handled",
 			},
 			{
@@ -938,7 +940,7 @@ func BenchmarkKeyGeneration(b *testing.B) {
 		name := "test-diagram-name"
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = kg.DiagramKey(name)
+			_ = kg.DiagramKey(models.DiagramTypePUML, name)
 		}
 	})
 

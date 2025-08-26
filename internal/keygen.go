@@ -5,11 +5,13 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 // KeyGenerator defines the interface for generating and validating cache keys
 type KeyGenerator interface {
-	DiagramKey(name string) string
+	DiagramKey(diagramType models.DiagramType, name string) string
 	StateMachineKey(umlVersion, name string) string
 	EntityKey(umlVersion, diagramName, entityID string) string
 	ValidateKey(key string) error
@@ -24,10 +26,10 @@ func NewKeyGenerator() KeyGenerator {
 }
 
 // DiagramKey generates a cache key for PlantUML diagrams
-// Format: /diagrams/puml/<diagram_name>
-func (kg *DefaultKeyGenerator) DiagramKey(name string) string {
+// Format: /diagrams/<diagram_type>/<diagram_name>
+func (kg *DefaultKeyGenerator) DiagramKey(diagramType models.DiagramType, name string) string {
 	sanitizedName := kg.sanitizeName(name)
-	return fmt.Sprintf("/diagrams/puml/%s", sanitizedName)
+	return fmt.Sprintf("/diagrams/%s/%s", diagramType.String(), sanitizedName)
 }
 
 // StateMachineKey generates a cache key for parsed state machines

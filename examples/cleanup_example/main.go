@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 func main() {
@@ -118,7 +119,7 @@ func populateTestData(ctx context.Context, cache cache.Cache) error {
 		diagramName := fmt.Sprintf("test-diagram-%d", i)
 		content := fmt.Sprintf("@startuml\nstate S%d\nstate T%d\nS%d --> T%d\n@enduml", i, i, i, i)
 
-		if err := cache.StoreDiagram(ctx, diagramName, content, time.Hour); err != nil {
+		if err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour); err != nil {
 			return fmt.Errorf("failed to store diagram %s: %w", diagramName, err)
 		}
 	}
@@ -126,7 +127,7 @@ func populateTestData(ctx context.Context, cache cache.Cache) error {
 	// Create some additional test keys with different patterns
 	for i := 0; i < 15; i++ {
 		key := fmt.Sprintf("test-key-%d", i)
-		if err := cache.StoreDiagram(ctx, key, "test content", time.Hour); err != nil {
+		if err := cache.StoreDiagram(ctx, models.DiagramTypePUML, key, "test content", time.Hour); err != nil {
 			return fmt.Errorf("failed to store test key %s: %w", key, err)
 		}
 	}

@@ -8,8 +8,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
-github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250823035235-fd02b59b179a h1:pLljC1+srwMkPuf9Bxq2yW4v4eP4F86D1rE7lmOdHck=
-github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250823035235-fd02b59b179a/go.mod h1:icSRm09Uqx4Rw8n7CgaX0ZbQjS/LXRRRwy3iwMbBHZA=
+github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250826163322-0ff6b181fbb0 h1:1xwCcZpEcab5Cnj/3q7NsOrai7SERPUFQzD+GQoZFdw=
+github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250826163322-0ff6b181fbb0/go.mod h1:icSRm09Uqx4Rw8n7CgaX0ZbQjS/LXRRRwy3iwMbBHZA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/redis/go-redis/v9 v9.12.1 h1:k5iquqv27aBtnTm2tIkROUDp8JBXhXZIVu1InSgvovg=

@@ -3,6 +3,8 @@ package internal
 import (
 	"strings"
 	"testing"
+
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 func TestNewKeyGenerator(t *testing.T) {
@@ -57,7 +59,7 @@ func TestDiagramKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := kg.DiagramKey(tt.input)
+			result := kg.DiagramKey(models.DiagramTypePUML, tt.input)
 			if result != tt.expected {
 				t.Errorf("DiagramKey(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
@@ -323,7 +325,7 @@ func TestKeyGenerationPatterns(t *testing.T) {
 	}{
 		{
 			name:        "diagram key validation",
-			keyFunc:     func() string { return kg.DiagramKey("test diagram") },
+			keyFunc:     func() string { return kg.DiagramKey(models.DiagramTypePUML, "test diagram") },
 			description: "diagram key should be valid",
 		},
 		{
@@ -359,8 +361,8 @@ func TestKeyGeneratorConsistency(t *testing.T) {
 
 	// Generate keys multiple times
 	for i := 0; i < 5; i++ {
-		diagramKey1 := kg.DiagramKey(name)
-		diagramKey2 := kg.DiagramKey(name)
+		diagramKey1 := kg.DiagramKey(models.DiagramTypePUML, name)
+		diagramKey2 := kg.DiagramKey(models.DiagramTypePUML, name)
 		if diagramKey1 != diagramKey2 {
 			t.Errorf("DiagramKey not consistent: %q != %q", diagramKey1, diagramKey2)
 		}

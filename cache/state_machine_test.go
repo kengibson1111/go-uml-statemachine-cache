@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -50,6 +51,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 	tests := []struct {
 		name        string
 		umlVersion  string
+		diagramType models.DiagramType
 		machineName string
 		machine     *models.StateMachine
 		ttl         time.Duration
@@ -60,13 +62,14 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "valid state machine storage",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestStateMachine",
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock diagram existence check (required for task 6.2)
-				diagramKey := "/diagrams/puml/TestStateMachine"
+				diagramKey := fmt.Sprintf("/diagrams/%s/TestStateMachine", models.DiagramTypePUML.String())
 				mockKeyGen.On("DiagramKey", "TestStateMachine").Return(diagramKey)
 				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
@@ -93,13 +96,14 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "valid state machine with default TTL",
 			umlVersion:  "2.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "DefaultTTLMachine",
 			machine:     sampleStateMachine,
 			ttl:         0, // Should use default TTL
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock diagram existence check (required for task 6.2)
-				diagramKey := "/diagrams/puml/DefaultTTLMachine"
+				diagramKey := fmt.Sprintf("/diagrams/%s/DefaultTTLMachine", models.DiagramTypePUML.String())
 				mockKeyGen.On("DiagramKey", "DefaultTTLMachine").Return(diagramKey)
 				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
@@ -125,6 +129,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "empty UML version",
 			umlVersion:  "",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestMachine",
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
@@ -137,6 +142,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "empty machine name",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "",
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
@@ -149,6 +155,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "nil state machine",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestMachine",
 			machine:     nil,
 			ttl:         time.Hour,
@@ -161,6 +168,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "diagram does not exist (task 6.2 requirement)",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "NonExistentDiagram",
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
@@ -168,7 +176,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			errorType:   CacheErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock diagram existence check - diagram not found
-				diagramKey := "/diagrams/puml/NonExistentDiagram"
+				diagramKey := fmt.Sprintf("/diagrams/%s/NonExistentDiagram", models.DiagramTypePUML.String())
 				mockKeyGen.On("DiagramKey", "NonExistentDiagram").Return(diagramKey)
 				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 				mockClient.On("GetWithRetry", ctx, diagramKey).Return("", redis.Nil)
@@ -177,13 +185,14 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		{
 			name:        "versioned cache path handling",
 			umlVersion:  "2.1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "VersionedMachine",
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock diagram existence check (required for task 6.2)
-				diagramKey := "/diagrams/puml/VersionedMachine"
+				diagramKey := fmt.Sprintf("/diagrams/%s/VersionedMachine", models.DiagramTypePUML.String())
 				mockKeyGen.On("DiagramKey", "VersionedMachine").Return(diagramKey)
 				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
@@ -218,7 +227,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.machineName, tt.machine, tt.ttl)
+			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.diagramType, tt.machineName, tt.machine, tt.ttl)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -648,30 +657,35 @@ func TestVersionedCachePaths(t *testing.T) {
 	tests := []struct {
 		name        string
 		umlVersion  string
+		diagramType models.DiagramType
 		machineName string
 		expectedKey string
 	}{
 		{
 			name:        "version 1.0",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestMachine",
 			expectedKey: "/machines/1.0/TestMachine",
 		},
 		{
 			name:        "version 2.1.0",
 			umlVersion:  "2.1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestMachine",
 			expectedKey: "/machines/2.1.0/TestMachine",
 		},
 		{
 			name:        "version with special characters",
 			umlVersion:  "1.0-beta",
+			diagramType: models.DiagramTypePUML,
 			machineName: "TestMachine",
 			expectedKey: "/machines/1.0-beta/TestMachine",
 		},
 		{
 			name:        "machine name with special characters",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "Test/Machine-Name_v1",
 			expectedKey: "/machines/1.0/Test%2FMachine-Name_v1",
 		},
@@ -685,7 +699,7 @@ func TestVersionedCachePaths(t *testing.T) {
 			if tt.machineName == "Test/Machine-Name_v1" {
 				sanitizedName = "Test-Machine-Name_v1" // / becomes -
 			}
-			diagramKey := "/diagrams/puml/" + sanitizedName
+			diagramKey := fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), sanitizedName)
 			mockKeyGen.On("DiagramKey", sanitizedName).Return(diagramKey)
 			mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 			mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
@@ -699,7 +713,7 @@ func TestVersionedCachePaths(t *testing.T) {
 
 			cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.machineName, sampleMachine, time.Hour)
+			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.diagramType, tt.machineName, sampleMachine, time.Hour)
 			require.NoError(t, err)
 
 			mockClient.AssertExpectations(t)

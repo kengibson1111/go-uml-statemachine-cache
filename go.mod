@@ -3,7 +3,7 @@ module github.com/kengibson1111/go-uml-statemachine-cache
 go 1.24.4
 
 require (
-	github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250823035235-fd02b59b179a
+	github.com/kengibson1111/go-uml-statemachine-models v0.0.0-20250826163322-0ff6b181fbb0
 	github.com/redis/go-redis/v9 v9.12.1
 	github.com/stretchr/testify v1.10.0
 )

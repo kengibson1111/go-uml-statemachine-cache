@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -549,11 +550,11 @@ func TestRedisCache_EdgeCases(t *testing.T) {
 		config := DefaultRedisConfig()
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		mockKeyGen.On("DiagramKey", "test").Return("/diagrams/puml/test")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/test").Return(nil)
-		mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test", "content", config.DefaultTTL).Return(redis.Nil)
+		mockKeyGen.On("DiagramKey", "test").Return(fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()), "content", config.DefaultTTL).Return(redis.Nil)
 
-		err := cache.StoreDiagram(ctx, "test", "content", 0)
+		err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test", "content", 0)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to store diagram")
@@ -569,11 +570,11 @@ func TestRedisCache_EdgeCases(t *testing.T) {
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
 		connErr := errors.New("connection refused")
-		mockKeyGen.On("DiagramKey", "test").Return("/diagrams/puml/test")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/test").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/test").Return("", connErr)
+		mockKeyGen.On("DiagramKey", "test").Return(fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return("", connErr)
 
-		result, err := cache.GetDiagram(ctx, "test")
+		result, err := cache.GetDiagram(ctx, models.DiagramTypePUML, "test")
 
 		assert.Error(t, err)
 		assert.Empty(t, result)
@@ -635,16 +636,16 @@ func TestRedisCache_ConcurrencyAndThreadSafety(t *testing.T) {
 
 		// Set up mocks for concurrent operations
 		for i := 0; i < 10; i++ {
-			mockKeyGen.On("DiagramKey", mock.AnythingOfType("string")).Return("/diagrams/puml/test")
-			mockKeyGen.On("ValidateKey", "/diagrams/puml/test").Return(nil)
-			mockClient.On("SetWithRetry", ctx, "/diagrams/puml/test", mock.AnythingOfType("string"), config.DefaultTTL).Return(nil)
+			mockKeyGen.On("DiagramKey", mock.AnythingOfType("string")).Return(fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()))
+			mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return(nil)
+			mockClient.On("SetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()), mock.AnythingOfType("string"), config.DefaultTTL).Return(nil)
 		}
 
 		// Run concurrent operations
 		done := make(chan bool, 10)
 		for i := 0; i < 10; i++ {
 			go func(id int) {
-				err := cache.StoreDiagram(ctx, "test", "content", 0)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test", "content", 0)
 				assert.NoError(t, err)
 				done <- true
 			}(i)

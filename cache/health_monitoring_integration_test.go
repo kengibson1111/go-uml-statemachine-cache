@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -134,7 +135,7 @@ func TestHealthMonitoringIntegration(t *testing.T) {
 
 	t.Run("health monitoring with cache operations", func(t *testing.T) {
 		// Store some test data
-		err := redisCache.StoreDiagram(ctx, "health-test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour)
+		err := redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "health-test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour)
 		require.NoError(t, err, "Should be able to store test diagram")
 
 		// Get health status after operations
@@ -146,7 +147,7 @@ func TestHealthMonitoringIntegration(t *testing.T) {
 		assert.GreaterOrEqual(t, healthStatus.Performance.KeyspaceInfo.TotalKeys, int64(1), "Should have at least one key")
 
 		// Clean up
-		err = redisCache.DeleteDiagram(ctx, "health-test-diagram")
+		err = redisCache.DeleteDiagram(ctx, models.DiagramTypePUML, "health-test-diagram")
 		assert.NoError(t, err, "Should be able to clean up test data")
 	})
 }

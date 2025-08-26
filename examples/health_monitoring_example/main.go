@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 func main() {
@@ -127,7 +128,7 @@ func main() {
 	fmt.Println("---------------------------")
 
 	// Store a test diagram
-	err = redisCache.StoreDiagram(ctx, "test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour)
+	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "test-diagram", "@startuml\nstate A\nstate B\nA --> B\n@enduml", time.Hour)
 	if err != nil {
 		fmt.Printf("❌ Failed to store diagram: %v\n", err)
 	} else {

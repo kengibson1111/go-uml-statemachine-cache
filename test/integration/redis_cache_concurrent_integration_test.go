@@ -38,14 +38,14 @@ func TestRedisCache_ConcurrentDiagramOperations(t *testing.T) {
 				content := fmt.Sprintf("@startuml\nstate S%d_%d\n@enduml", goroutineID, j)
 
 				// Store diagram
-				err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d, operation %d: store failed: %w", goroutineID, j, err)
 					continue
 				}
 
 				// Retrieve diagram
-				retrieved, err := cache.GetDiagram(ctx, diagramName)
+				retrieved, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d, operation %d: get failed: %w", goroutineID, j, err)
 					continue
@@ -94,7 +94,7 @@ func TestRedisCache_ConcurrentStateMachineOperations(t *testing.T) {
 		for j := 0; j < numOperationsPerGoroutine; j++ {
 			diagramName := fmt.Sprintf("concurrent-sm-diagram-%d-%d", i, j)
 			content := fmt.Sprintf("@startuml\nstate S%d_%d\n@enduml", i, j)
-			err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+			err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 			require.NoError(t, err)
 		}
 	}
@@ -136,7 +136,7 @@ func TestRedisCache_ConcurrentStateMachineOperations(t *testing.T) {
 				}
 
 				// Store state machine
-				err := cache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, time.Hour)
+				err := cache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, diagramName, stateMachine, time.Hour)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d, operation %d: store SM failed: %w", goroutineID, j, err)
 					continue
@@ -216,14 +216,14 @@ func TestRedisCache_ThreadSafety(t *testing.T) {
 						content := fmt.Sprintf("@startuml\nstate ThreadSafe%d_%d\n@enduml", goroutineID, operationCount)
 
 						// Store
-						err := cache.StoreDiagram(ctx, diagramName, content, time.Minute)
+						err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Minute)
 						if err != nil {
 							errors <- fmt.Errorf("diagram store error (g%d, op%d): %w", goroutineID, operationCount, err)
 							continue
 						}
 
 						// Get
-						_, err = cache.GetDiagram(ctx, diagramName)
+						_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 						if err != nil {
 							errors <- fmt.Errorf("diagram get error (g%d, op%d): %w", goroutineID, operationCount, err)
 							continue
@@ -250,7 +250,7 @@ func TestRedisCache_ThreadSafety(t *testing.T) {
 
 						// First store the diagram
 						diagramContent := fmt.Sprintf("@startuml\nstate ThreadSafeSM%d_%d\n@enduml", goroutineID, operationCount)
-						err := cache.StoreDiagram(ctx, diagramName, diagramContent, time.Minute)
+						err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, diagramContent, time.Minute)
 						if err != nil {
 							errors <- fmt.Errorf("SM diagram store error (g%d, op%d): %w", goroutineID, operationCount, err)
 							continue
@@ -269,7 +269,7 @@ func TestRedisCache_ThreadSafety(t *testing.T) {
 							},
 						}
 
-						err = cache.StoreStateMachine(ctx, "2.0", diagramName, stateMachine, time.Minute)
+						err = cache.StoreStateMachine(ctx, "2.0", models.DiagramTypePUML, diagramName, stateMachine, time.Minute)
 						if err != nil {
 							errors <- fmt.Errorf("SM store error (g%d, op%d): %w", goroutineID, operationCount, err)
 							continue
@@ -342,7 +342,7 @@ func TestRedisCache_PerformanceBenchmark(t *testing.T) {
 
 					// Store operation
 					storeStart := time.Now()
-					err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+					err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 					if err != nil {
 						errors <- fmt.Errorf("store operation %d failed: %w", opID, err)
 						return
@@ -351,7 +351,7 @@ func TestRedisCache_PerformanceBenchmark(t *testing.T) {
 
 					// Get operation
 					getStart := time.Now()
-					retrieved, err := cache.GetDiagram(ctx, diagramName)
+					retrieved, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 					if err != nil {
 						errors <- fmt.Errorf("get operation %d failed: %w", opID, err)
 						return
@@ -448,14 +448,14 @@ func TestRedisCache_StressTest(t *testing.T) {
 						goroutineID, ops, goroutineID, ops)
 
 					// Store operation
-					err := cache.StoreDiagram(ctx, diagramName, content, time.Minute)
+					err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Minute)
 					if err != nil {
 						errors++
 						continue
 					}
 
 					// Get operation
-					_, err = cache.GetDiagram(ctx, diagramName)
+					_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 					if err != nil {
 						errors++
 						continue
@@ -495,7 +495,7 @@ func TestRedisCache_ConnectionResilience(t *testing.T) {
 	defer cancel()
 
 	// This should trigger a timeout error
-	err := cache.StoreDiagram(shortCtx, "timeout-test", "content", time.Hour)
+	err := cache.StoreDiagram(shortCtx, models.DiagramTypePUML, "timeout-test", "content", time.Hour)
 
 	// We expect either a timeout error or context deadline exceeded
 	if err != nil {
@@ -507,7 +507,7 @@ func TestRedisCache_ConnectionResilience(t *testing.T) {
 	}
 
 	// Test that normal operations still work after timeout
-	err = cache.StoreDiagram(ctx, "recovery-test", "content", time.Hour)
+	err = cache.StoreDiagram(ctx, models.DiagramTypePUML, "recovery-test", "content", time.Hour)
 	assert.NoError(t, err, "Cache should recover after timeout")
 }
 
@@ -531,7 +531,7 @@ func TestRedisCache_MemoryUsage(t *testing.T) {
 		diagramName := fmt.Sprintf("memory-test-%d", i)
 		content := generateTestContent(itemSize)
 
-		err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+		err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 		require.NoError(t, err)
 	}
 
@@ -543,7 +543,7 @@ func TestRedisCache_MemoryUsage(t *testing.T) {
 	// Clean up all items
 	for i := 0; i < numItems; i++ {
 		diagramName := fmt.Sprintf("memory-test-%d", i)
-		err := cache.DeleteDiagram(ctx, diagramName)
+		err := cache.DeleteDiagram(ctx, models.DiagramTypePUML, diagramName)
 		require.NoError(t, err)
 	}
 

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -90,9 +91,9 @@ func TestRedisCache_ReferentialIntegrity_EntityMappingConsistency(t *testing.T) 
 		config := &RedisConfig{DefaultTTL: time.Hour}
 
 		// Setup mocks for diagram existence check
-		mockKeyGen.On("DiagramKey", "ComplexMachine").Return("/diagrams/puml/ComplexMachine")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/ComplexMachine").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/ComplexMachine").Return("@startuml\nstate A\n@enduml", nil)
+		mockKeyGen.On("DiagramKey", "ComplexMachine").Return(fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String())).Return("@startuml\nstate A\n@enduml", nil)
 
 		// Setup mocks for state machine key
 		mockKeyGen.On("StateMachineKey", "1.0", "ComplexMachine").Return("/machines/1.0/ComplexMachine")
@@ -122,7 +123,7 @@ func TestRedisCache_ReferentialIntegrity_EntityMappingConsistency(t *testing.T) 
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		err := cache.StoreStateMachine(ctx, "1.0", "ComplexMachine", complexStateMachine, time.Hour)
+		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "ComplexMachine", complexStateMachine, time.Hour)
 		require.NoError(t, err)
 
 		// Verify that all expected entities are in the Entities map
@@ -151,9 +152,9 @@ func TestRedisCache_ReferentialIntegrity_EntityMappingConsistency(t *testing.T) 
 		}
 
 		// Setup mocks for diagram existence check
-		mockKeyGen.On("DiagramKey", "ComplexMachine").Return("/diagrams/puml/ComplexMachine")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/ComplexMachine").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/ComplexMachine").Return("@startuml\nstate A\n@enduml", nil)
+		mockKeyGen.On("DiagramKey", "ComplexMachine").Return(fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/ComplexMachine", models.DiagramTypePUML.String())).Return("@startuml\nstate A\n@enduml", nil)
 
 		// Setup mocks for state machine key
 		mockKeyGen.On("StateMachineKey", "1.0", "ComplexMachine").Return("/machines/1.0/ComplexMachine")
@@ -183,7 +184,7 @@ func TestRedisCache_ReferentialIntegrity_EntityMappingConsistency(t *testing.T) 
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		err := cache.StoreStateMachine(ctx, "1.0", "ComplexMachine", complexStateMachine, time.Hour)
+		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "ComplexMachine", complexStateMachine, time.Hour)
 		require.NoError(t, err)
 
 		// Verify that old entities are gone and new entities are present
@@ -239,9 +240,9 @@ func TestRedisCache_ReferentialIntegrity_PartialStorageFailure(t *testing.T) {
 		config := &RedisConfig{DefaultTTL: time.Hour}
 
 		// Setup mocks for diagram existence check
-		mockKeyGen.On("DiagramKey", "TestMachine").Return("/diagrams/puml/TestMachine")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/TestMachine").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/TestMachine").Return("@startuml\nstate A\n@enduml", nil)
+		mockKeyGen.On("DiagramKey", "TestMachine").Return(fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String())).Return("@startuml\nstate A\n@enduml", nil)
 
 		// Setup mocks for state machine key
 		mockKeyGen.On("StateMachineKey", "1.0", "TestMachine").Return("/machines/1.0/TestMachine")
@@ -253,7 +254,7 @@ func TestRedisCache_ReferentialIntegrity_PartialStorageFailure(t *testing.T) {
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		err := cache.StoreStateMachine(ctx, "1.0", "TestMachine", sampleStateMachine, time.Hour)
+		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "TestMachine", sampleStateMachine, time.Hour)
 		require.Error(t, err)
 		cacheErr, ok := err.(*CacheError)
 		require.True(t, ok, "Expected CacheError, got %T", err)
@@ -270,9 +271,9 @@ func TestRedisCache_ReferentialIntegrity_PartialStorageFailure(t *testing.T) {
 		config := &RedisConfig{DefaultTTL: time.Hour}
 
 		// Setup mocks for diagram existence check
-		mockKeyGen.On("DiagramKey", "TestMachine").Return("/diagrams/puml/TestMachine")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/TestMachine").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/TestMachine").Return("@startuml\nstate A\n@enduml", nil)
+		mockKeyGen.On("DiagramKey", "TestMachine").Return(fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/TestMachine", models.DiagramTypePUML.String())).Return("@startuml\nstate A\n@enduml", nil)
 
 		// Setup mocks for state machine key
 		mockKeyGen.On("StateMachineKey", "1.0", "TestMachine").Return("/machines/1.0/TestMachine")
@@ -311,7 +312,7 @@ func TestRedisCache_ReferentialIntegrity_PartialStorageFailure(t *testing.T) {
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		err := cache.StoreStateMachine(ctx, "1.0", "TestMachine", sampleStateMachine, time.Hour)
+		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "TestMachine", sampleStateMachine, time.Hour)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to store state machine 'TestMachine'")
 
@@ -520,9 +521,9 @@ func TestRedisCache_ReferentialIntegrity_EntityKeyValidation(t *testing.T) {
 		config := &RedisConfig{DefaultTTL: time.Hour}
 
 		// Setup mocks for diagram existence check
-		mockKeyGen.On("DiagramKey", "TestMachineValidation").Return("/diagrams/puml/TestMachineValidation")
-		mockKeyGen.On("ValidateKey", "/diagrams/puml/TestMachineValidation").Return(nil)
-		mockClient.On("GetWithRetry", ctx, "/diagrams/puml/TestMachineValidation").Return("@startuml\nstate A\n@enduml", nil)
+		mockKeyGen.On("DiagramKey", "TestMachineValidation").Return(fmt.Sprintf("/diagrams/%s/TestMachineValidation", models.DiagramTypePUML.String()))
+		mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/TestMachineValidation", models.DiagramTypePUML.String())).Return(nil)
+		mockClient.On("GetWithRetry", ctx, fmt.Sprintf("/diagrams/%s/TestMachineValidation", models.DiagramTypePUML.String())).Return("@startuml\nstate A\n@enduml", nil)
 
 		// Setup mocks for state machine key
 		mockKeyGen.On("StateMachineKey", "1.0", "TestMachineValidation").Return("/machines/1.0/TestMachineValidation")
@@ -534,7 +535,7 @@ func TestRedisCache_ReferentialIntegrity_EntityKeyValidation(t *testing.T) {
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
-		err := cache.StoreStateMachine(ctx, "1.0", "TestMachineValidation", sampleStateMachine, time.Hour)
+		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "TestMachineValidation", sampleStateMachine, time.Hour)
 		require.Error(t, err)
 		cacheErr, ok := err.(*CacheError)
 		require.True(t, ok, "Expected CacheError, got %T", err)

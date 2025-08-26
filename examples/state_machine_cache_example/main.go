@@ -69,7 +69,7 @@ func main() {
 	umlVersion := "1.2024.8"
 
 	fmt.Printf("2. Storing diagram '%s'...\n", diagramName)
-	err = redisCache.StoreDiagram(ctx, diagramName, samplePUMLDiagram, 1*time.Hour)
+	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, samplePUMLDiagram, 1*time.Hour)
 	if err != nil {
 		log.Fatalf("Failed to store diagram: %v", err)
 	}
@@ -85,7 +85,7 @@ func main() {
 
 	// Store the state machine (this will also store individual entities)
 	fmt.Printf("4. Storing state machine '%s' (version %s)...\n", diagramName, umlVersion)
-	err = redisCache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, 1*time.Hour)
+	err = redisCache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, diagramName, stateMachine, 1*time.Hour)
 	if err != nil {
 		log.Fatalf("Failed to store state machine: %v", err)
 	}
@@ -134,7 +134,7 @@ func main() {
 
 	// Try to store state machine without diagram
 	fmt.Println("Attempting to store state machine without corresponding diagram...")
-	err = redisCache.StoreStateMachine(ctx, umlVersion, "non-existent-diagram", stateMachine, 1*time.Hour)
+	err = redisCache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, "non-existent-diagram", stateMachine, 1*time.Hour)
 	if err != nil {
 		if cache.IsValidationError(err) {
 			fmt.Println("✓ Correctly prevented storing state machine without diagram")
@@ -186,7 +186,7 @@ func main() {
 
 	// Cleanup diagram
 	fmt.Printf("Cleaning up diagram '%s'...\n", diagramName)
-	err = redisCache.DeleteDiagram(ctx, diagramName)
+	err = redisCache.DeleteDiagram(ctx, models.DiagramTypePUML, diagramName)
 	if err != nil {
 		log.Printf("Warning: Failed to delete diagram: %v", err)
 	} else {

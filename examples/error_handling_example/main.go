@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 func main() {
@@ -28,7 +29,7 @@ func main() {
 
 	// Example 1: Demonstrate validation errors
 	fmt.Println("\n1. Validation Error Example:")
-	err = redisCache.StoreDiagram(ctx, "", "some content", time.Hour)
+	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "", "some content", time.Hour)
 	if err != nil {
 		if cache.IsValidationError(err) {
 			fmt.Printf("   Validation error detected: %v\n", err)
@@ -39,7 +40,7 @@ func main() {
 
 	// Example 2: Demonstrate not found errors
 	fmt.Println("\n2. Not Found Error Example:")
-	_, err = redisCache.GetDiagram(ctx, "non-existent-diagram")
+	_, err = redisCache.GetDiagram(ctx, models.DiagramTypePUML, "non-existent-diagram")
 	if err != nil {
 		if cache.IsNotFoundError(err) {
 			fmt.Printf("   Not found error detected: %v\n", err)

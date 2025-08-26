@@ -201,7 +201,7 @@ func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen 
 }
 
 // StoreDiagram stores a PlantUML diagram with TTL support
-func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error {
+func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, pumlContent string, ttl time.Duration) error {
 	// Validate context
 	if err := rc.validator.ValidateContext(ctx); err != nil {
 		return err
@@ -224,7 +224,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 	}
 
 	// Generate cache key using sanitized name
-	key := rc.keyGen.DiagramKey(sanitizedName)
+	key := rc.keyGen.DiagramKey(diagramType, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -252,7 +252,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, name string, pumlContent
 }
 
 // GetDiagram retrieves a PlantUML diagram with error handling
-func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, error) {
+func (rc *RedisCache) GetDiagram(ctx context.Context, diagramType models.DiagramType, name string) (string, error) {
 	// Validate context
 	if err := rc.validator.ValidateContext(ctx); err != nil {
 		return "", err
@@ -265,7 +265,7 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 	}
 
 	// Generate cache key using sanitized name
-	key := rc.keyGen.DiagramKey(sanitizedName)
+	key := rc.keyGen.DiagramKey(diagramType, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -291,7 +291,7 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, name string) (string, erro
 }
 
 // DeleteDiagram removes a diagram from the cache for cleanup
-func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
+func (rc *RedisCache) DeleteDiagram(ctx context.Context, diagramType models.DiagramType, name string) error {
 	// Validate context
 	if err := rc.validator.ValidateContext(ctx); err != nil {
 		return err
@@ -304,7 +304,7 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 	}
 
 	// Generate cache key using sanitized name
-	key := rc.keyGen.DiagramKey(sanitizedName)
+	key := rc.keyGen.DiagramKey(diagramType, sanitizedName)
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
@@ -327,7 +327,7 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, name string) error {
 }
 
 // StoreStateMachine stores a parsed state machine with TTL support and creates entity cache paths
-func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error {
+func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, diagramType models.DiagramType, name string, machine *models.StateMachine, ttl time.Duration) error {
 	// Validate context
 	if err := rc.validator.ValidateContext(ctx); err != nil {
 		return err
@@ -354,7 +354,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion, name st
 	}
 
 	// Validate that the corresponding diagram exists before storing state machine
-	_, err = rc.GetDiagram(ctx, sanitizedName)
+	_, err = rc.GetDiagram(ctx, diagramType, sanitizedName)
 	if err != nil {
 		if IsNotFoundError(err) {
 			return NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", sanitizedName), err)

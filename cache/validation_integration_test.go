@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		content     string
 		ttl         time.Duration
@@ -25,6 +27,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 	}{
 		{
 			name:        "empty diagram name",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
@@ -33,6 +36,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "empty content",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "",
 			ttl:         time.Hour,
@@ -41,6 +45,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "negative TTL",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         -time.Hour,
@@ -49,6 +54,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "diagram name with special characters",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test/diagram with spaces & symbols",
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
@@ -56,6 +62,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "content with security threat",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "@startuml\n<script>alert('xss')</script>\n@enduml",
 			ttl:         time.Hour,
@@ -64,6 +71,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "diagram name too long",
+			diagramType: models.DiagramTypePUML,
 			diagramName: strings.Repeat("a", 101),
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
@@ -72,6 +80,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "content too large",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     strings.Repeat("a", 1024*1024+1),
 			ttl:         time.Hour,
@@ -80,6 +89,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		},
 		{
 			name:        "valid inputs",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "@startuml\nstate A\nstate B\nA --> B\n@enduml",
 			ttl:         time.Hour,
@@ -100,13 +110,13 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 				if tt.diagramName == "test/diagram with spaces & symbols" {
 					sanitizedName = "test-diagram_with_spaces_%26_symbols"
 				}
-				expectedKey := "/diagrams/puml/" + sanitizedName
+				expectedKey := fmt.Sprintf("/diagrams/%s/%s", tt.diagramType.String(), sanitizedName)
 				mockKeyGen.On("DiagramKey", sanitizedName).Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 				mockClient.On("SetWithRetry", ctx, expectedKey, tt.content, tt.ttl).Return(nil)
 			}
 
-			err := cache.StoreDiagram(ctx, tt.diagramName, tt.content, tt.ttl)
+			err := cache.StoreDiagram(ctx, tt.diagramType, tt.diagramName, tt.content, tt.ttl)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -138,6 +148,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 	tests := []struct {
 		name        string
 		umlVersion  string
+		diagramType models.DiagramType
 		machineName string
 		machine     *models.StateMachine
 		ttl         time.Duration
@@ -147,6 +158,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "empty UML version",
 			umlVersion:  "",
+			diagramType: models.DiagramTypePUML,
 			machineName: "test-machine",
 			machine:     validMachine,
 			ttl:         time.Hour,
@@ -156,6 +168,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "empty machine name",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "",
 			machine:     validMachine,
 			ttl:         time.Hour,
@@ -165,6 +178,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "nil machine",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "test-machine",
 			machine:     nil,
 			ttl:         time.Hour,
@@ -174,6 +188,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "invalid version format",
 			umlVersion:  "1.0@beta",
+			diagramType: models.DiagramTypePUML,
 			machineName: "test-machine",
 			machine:     validMachine,
 			ttl:         time.Hour,
@@ -183,6 +198,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "machine name with path traversal",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "../../../etc/passwd",
 			machine:     validMachine,
 			ttl:         time.Hour,
@@ -192,6 +208,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		{
 			name:        "TTL too large",
 			umlVersion:  "1.0",
+			diagramType: models.DiagramTypePUML,
 			machineName: "test-machine",
 			machine:     validMachine,
 			ttl:         400 * 24 * time.Hour, // More than 1 year
@@ -214,7 +231,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 				if tt.machineName == "test-machine" {
 					sanitizedName = "test-machine" // No sanitization needed for this name
 				}
-				diagramKey := "/diagrams/puml/" + sanitizedName
+				diagramKey := fmt.Sprintf("/diagrams/%s/%s", tt.diagramType.String(), sanitizedName)
 				mockKeyGen.On("DiagramKey", sanitizedName).Return(diagramKey)
 				mockKeyGen.On("ValidateKey", diagramKey).Return(nil)
 				mockClient.On("GetWithRetry", ctx, diagramKey).Return("@startuml\nstate A\n@enduml", nil)
@@ -229,7 +246,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 				}
 			}
 
-			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.machineName, tt.machine, tt.ttl)
+			err := cache.StoreStateMachine(ctx, tt.umlVersion, tt.diagramType, tt.machineName, tt.machine, tt.ttl)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -390,12 +407,12 @@ func TestRedisCache_EnhancedValidation_ContextValidation(t *testing.T) {
 
 			if !tt.expectError {
 				// Setup mocks for successful operation
-				mockKeyGen.On("DiagramKey", "test").Return("/diagrams/puml/test")
-				mockKeyGen.On("ValidateKey", "/diagrams/puml/test").Return(nil)
-				mockClient.On("GetWithRetry", tt.ctx, "/diagrams/puml/test").Return("content", nil)
+				mockKeyGen.On("DiagramKey", "test").Return(fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()))
+				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return(nil)
+				mockClient.On("GetWithRetry", tt.ctx, fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())).Return("content", nil)
 			}
 
-			_, err := cache.GetDiagram(tt.ctx, "test")
+			_, err := cache.GetDiagram(tt.ctx, models.DiagramTypePUML, "test")
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -440,7 +457,7 @@ func TestRedisCache_EnhancedValidation_SecurityThreats(t *testing.T) {
 
 			// Setup mocks for safe content tests
 			if !tt.expected {
-				mockKeyGen.On("DiagramKey", mock.Anything).Return("/diagrams/puml/test")
+				mockKeyGen.On("DiagramKey", mock.Anything).Return(fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String()))
 				mockKeyGen.On("ValidateKey", mock.Anything).Return(nil)
 				mockClient.On("SetWithRetry", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			}
@@ -448,9 +465,9 @@ func TestRedisCache_EnhancedValidation_SecurityThreats(t *testing.T) {
 			var err error
 			switch tt.field {
 			case "name":
-				err = cache.StoreDiagram(ctx, tt.input, "@startuml\nstate A\n@enduml", time.Hour)
+				err = cache.StoreDiagram(ctx, models.DiagramTypePUML, tt.input, "@startuml\nstate A\n@enduml", time.Hour)
 			case "content":
-				err = cache.StoreDiagram(ctx, "test-diagram", tt.input, time.Hour)
+				err = cache.StoreDiagram(ctx, models.DiagramTypePUML, "test-diagram", tt.input, time.Hour)
 			}
 
 			if tt.expected {
@@ -503,12 +520,12 @@ func TestRedisCache_EnhancedValidation_InputSanitization(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test name sanitization
 			if strings.Contains(tt.name, "name") {
-				expectedKey := "/diagrams/puml/" + tt.expectedOutput
+				expectedKey := fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), tt.expectedOutput)
 				mockKeyGen.On("DiagramKey", tt.expectedOutput).Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 				mockClient.On("SetWithRetry", ctx, expectedKey, "@startuml\nstate A\n@enduml", mock.Anything).Return(nil)
 
-				err := cache.StoreDiagram(ctx, tt.input, "@startuml\nstate A\n@enduml", time.Hour)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, tt.input, "@startuml\nstate A\n@enduml", time.Hour)
 				assert.NoError(t, err)
 			}
 
@@ -519,7 +536,7 @@ func TestRedisCache_EnhancedValidation_InputSanitization(t *testing.T) {
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 				mockClient.On("SetWithRetry", ctx, expectedKey, tt.expectedOutput, mock.Anything).Return(nil)
 
-				err := cache.StoreDiagram(ctx, "test", tt.input, time.Hour)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test", tt.input, time.Hour)
 				assert.NoError(t, err)
 			}
 		})

@@ -14,7 +14,7 @@
 // # Key Structure
 //
 // The cache uses a hierarchical key structure in Redis:
-//   - PlantUML Diagrams: /diagrams/puml/<diagram_name>
+//   - PlantUML Diagrams: /diagrams/<diagram_type>/<diagram_name>
 //   - Parsed State Machines: /machines/<uml_version>/<diagram_name>
 //   - State Machine Entities: /machines/<uml_version>/<diagram_name>/entities/<entity_id>
 //
@@ -32,14 +32,14 @@
 //	ctx := context.Background()
 //
 //	// Store and retrieve diagrams
-//	err = redisCache.StoreDiagram(ctx, "my-diagram", pumlContent, time.Hour)
-//	content, err := redisCache.GetDiagram(ctx, "my-diagram")
+//	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "my-diagram", pumlContent, time.Hour)
+//	content, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "my-diagram")
 //
 // # Error Handling
 //
 // The package provides comprehensive error handling with typed errors:
 //
-//	_, err := redisCache.GetDiagram(ctx, "nonexistent")
+//	_, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "nonexistent")
 //	if err != nil {
 //	    switch {
 //	    case cache.IsNotFoundError(err):
@@ -264,12 +264,12 @@ type DataIntegrityCheck struct {
 // Cache defines the interface for caching PlantUML diagrams and parsed state machines
 type Cache interface {
 	// Diagram operations
-	StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error
-	GetDiagram(ctx context.Context, name string) (string, error)
-	DeleteDiagram(ctx context.Context, name string) error
+	StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, pumlContent string, ttl time.Duration) error
+	GetDiagram(ctx context.Context, diagramType models.DiagramType, name string) (string, error)
+	DeleteDiagram(ctx context.Context, diagramType models.DiagramType, name string) error
 
 	// State machine operations
-	StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error
+	StoreStateMachine(ctx context.Context, umlVersion string, diagramType models.DiagramType, name string, machine *models.StateMachine, ttl time.Duration) error
 	GetStateMachine(ctx context.Context, umlVersion, name string) (*models.StateMachine, error)
 	DeleteStateMachine(ctx context.Context, umlVersion, name string) error
 

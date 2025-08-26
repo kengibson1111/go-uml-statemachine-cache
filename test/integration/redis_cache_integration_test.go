@@ -7,6 +7,7 @@ import (
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
 	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +21,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		content     string
 		ttl         time.Duration
@@ -28,6 +30,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 	}{
 		{
 			name:        "valid diagram storage",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram",
 			content:     "@startuml\nstate A\nstate B\nA --> B\n@enduml",
 			ttl:         time.Hour,
@@ -35,6 +38,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 		},
 		{
 			name:        "valid diagram with default TTL",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test-diagram-default-ttl",
 			content:     "@startuml\nstate X\nstate Y\nX --> Y\n@enduml",
 			ttl:         0, // Should use default TTL
@@ -42,6 +46,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 		},
 		{
 			name:        "diagram with special characters",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "test/diagram-with-special_chars.puml",
 			content:     "@startuml\nstate \"State with spaces\"\n@enduml",
 			ttl:         time.Hour,
@@ -51,7 +56,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := cache.StoreDiagram(ctx, tt.diagramName, tt.content, tt.ttl)
+			err := cache.StoreDiagram(ctx, tt.diagramType, tt.diagramName, tt.content, tt.ttl)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -64,7 +69,7 @@ func TestRedisCache_StoreDiagram_Integration(t *testing.T) {
 				require.NoError(t, err)
 
 				// Verify the diagram was stored by retrieving it
-				retrieved, err := cache.GetDiagram(ctx, tt.diagramName)
+				retrieved, err := cache.GetDiagram(ctx, tt.diagramType, tt.diagramName)
 				require.NoError(t, err)
 				assert.Equal(t, tt.content, retrieved)
 			}
@@ -81,11 +86,12 @@ func TestRedisCache_GetDiagram_Integration(t *testing.T) {
 	// Store a test diagram first
 	testName := "test-get-diagram"
 	testContent := "@startuml\nstate A\nstate B\nA --> B\n@enduml"
-	err := cache.StoreDiagram(ctx, testName, testContent, time.Hour)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, testName, testContent, time.Hour)
 	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		expectError bool
 		errorType   internal.ErrorType
@@ -93,12 +99,14 @@ func TestRedisCache_GetDiagram_Integration(t *testing.T) {
 	}{
 		{
 			name:        "retrieve existing diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: testName,
 			expectError: false,
 			expected:    testContent,
 		},
 		{
 			name:        "retrieve non-existent diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "non-existent-diagram",
 			expectError: true,
 			errorType:   internal.ErrorType(internal.ErrorTypeNotFound),
@@ -107,7 +115,7 @@ func TestRedisCache_GetDiagram_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			content, err := cache.GetDiagram(ctx, tt.diagramName)
+			content, err := cache.GetDiagram(ctx, tt.diagramType, tt.diagramName)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -134,22 +142,25 @@ func TestRedisCache_DeleteDiagram_Integration(t *testing.T) {
 	// Store a test diagram first
 	testName := "test-delete-diagram"
 	testContent := "@startuml\nstate A\n@enduml"
-	err := cache.StoreDiagram(ctx, testName, testContent, time.Hour)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, testName, testContent, time.Hour)
 	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
+		diagramType models.DiagramType
 		diagramName string
 		expectError bool
 		errorType   internal.ErrorType
 	}{
 		{
 			name:        "delete existing diagram",
+			diagramType: models.DiagramTypePUML,
 			diagramName: testName,
 			expectError: false,
 		},
 		{
 			name:        "delete non-existent diagram (should not error)",
+			diagramType: models.DiagramTypePUML,
 			diagramName: "non-existent-diagram",
 			expectError: false,
 		},
@@ -157,7 +168,7 @@ func TestRedisCache_DeleteDiagram_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := cache.DeleteDiagram(ctx, tt.diagramName)
+			err := cache.DeleteDiagram(ctx, tt.diagramType, tt.diagramName)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -171,7 +182,7 @@ func TestRedisCache_DeleteDiagram_Integration(t *testing.T) {
 
 				// If we deleted an existing diagram, verify it's gone
 				if tt.diagramName == testName {
-					_, err := cache.GetDiagram(ctx, tt.diagramName)
+					_, err := cache.GetDiagram(ctx, tt.diagramType, tt.diagramName)
 					require.Error(t, err)
 					assert.True(t, internal.IsNotFoundError(err))
 				}
@@ -191,11 +202,11 @@ func TestRedisCache_DiagramTTL_Integration(t *testing.T) {
 	testContent := "@startuml\nstate A\n@enduml"
 	shortTTL := 100 * time.Millisecond
 
-	err := cache.StoreDiagram(ctx, testName, testContent, shortTTL)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, testName, testContent, shortTTL)
 	require.NoError(t, err)
 
 	// Verify it exists immediately
-	content, err := cache.GetDiagram(ctx, testName)
+	content, err := cache.GetDiagram(ctx, models.DiagramTypePUML, testName)
 	require.NoError(t, err)
 	assert.Equal(t, testContent, content)
 
@@ -203,7 +214,7 @@ func TestRedisCache_DiagramTTL_Integration(t *testing.T) {
 	time.Sleep(shortTTL + 50*time.Millisecond)
 
 	// Verify it's gone
-	_, err = cache.GetDiagram(ctx, testName)
+	_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, testName)
 	require.Error(t, err)
 	assert.True(t, internal.IsNotFoundError(err))
 }
@@ -219,20 +230,20 @@ func TestRedisCache_DiagramOperationsIntegration(t *testing.T) {
 	content := "@startuml\nstate Start\nstate End\nStart --> End\n@enduml"
 
 	// Store
-	err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 	require.NoError(t, err)
 
 	// Get
-	retrieved, err := cache.GetDiagram(ctx, diagramName)
+	retrieved, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 	require.NoError(t, err)
 	assert.Equal(t, content, retrieved)
 
 	// Delete
-	err = cache.DeleteDiagram(ctx, diagramName)
+	err = cache.DeleteDiagram(ctx, models.DiagramTypePUML, diagramName)
 	require.NoError(t, err)
 
 	// Verify gone
-	_, err = cache.GetDiagram(ctx, diagramName)
+	_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 	require.Error(t, err)
 	assert.True(t, internal.IsNotFoundError(err))
 }

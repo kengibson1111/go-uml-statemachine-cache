@@ -11,19 +11,19 @@ import (
 // MockCache is a simple mock implementation of the Cache interface for testing
 type MockCache struct{}
 
-func (m *MockCache) StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error {
+func (m *MockCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, pumlContent string, ttl time.Duration) error {
 	return nil
 }
 
-func (m *MockCache) GetDiagram(ctx context.Context, name string) (string, error) {
+func (m *MockCache) GetDiagram(ctx context.Context, diagramType models.DiagramType, name string) (string, error) {
 	return "", nil
 }
 
-func (m *MockCache) DeleteDiagram(ctx context.Context, name string) error {
+func (m *MockCache) DeleteDiagram(ctx context.Context, diagramType models.DiagramType, name string) error {
 	return nil
 }
 
-func (m *MockCache) StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error {
+func (m *MockCache) StoreStateMachine(ctx context.Context, umlVersion string, diagramType models.DiagramType, name string, machine *models.StateMachine, ttl time.Duration) error {
 	return nil
 }
 
@@ -116,11 +116,11 @@ func TestCacheInterface(t *testing.T) {
 	// Test basic interface compliance by calling methods
 	ctx := context.Background()
 
-	if err := cache.StoreDiagram(ctx, "test", "content", time.Hour); err != nil {
+	if err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test", "content", time.Hour); err != nil {
 		t.Errorf("StoreDiagram failed: %v", err)
 	}
 
-	if _, err := cache.GetDiagram(ctx, "test"); err != nil {
+	if _, err := cache.GetDiagram(ctx, models.DiagramTypePUML, "test"); err != nil {
 		t.Errorf("GetDiagram failed: %v", err)
 	}
 

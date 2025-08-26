@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/mock"
 )
@@ -149,7 +150,7 @@ func NewMockKeyGenerator() *MockKeyGenerator {
 }
 
 // DiagramKey mocks the DiagramKey method
-func (m *MockKeyGenerator) DiagramKey(name string) string {
+func (m *MockKeyGenerator) DiagramKey(diagramType models.DiagramType, name string) string {
 	args := m.Called(name)
 	return args.String(0)
 }

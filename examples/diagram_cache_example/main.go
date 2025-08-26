@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
 // Example PlantUML diagram content
@@ -61,7 +62,7 @@ func main() {
 	diagramName := "simple-state-machine"
 	fmt.Printf("2. Storing diagram '%s'...\n", diagramName)
 
-	err = redisCache.StoreDiagram(ctx, diagramName, samplePUMLDiagram, 30*time.Minute)
+	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, samplePUMLDiagram, 30*time.Minute)
 	if err != nil {
 		log.Fatalf("Failed to store diagram: %v", err)
 	}
@@ -70,7 +71,7 @@ func main() {
 
 	// Retrieve the diagram
 	fmt.Printf("3. Retrieving diagram '%s'...\n", diagramName)
-	retrievedDiagram, err := redisCache.GetDiagram(ctx, diagramName)
+	retrievedDiagram, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 	if err != nil {
 		log.Fatalf("Failed to retrieve diagram: %v", err)
 	}
@@ -90,7 +91,7 @@ func main() {
 
 	// Demonstrate error handling - try to get non-existent diagram
 	fmt.Println("5. Testing error handling with non-existent diagram...")
-	_, err = redisCache.GetDiagram(ctx, "non-existent-diagram")
+	_, err = redisCache.GetDiagram(ctx, models.DiagramTypePUML, "non-existent-diagram")
 	if err != nil {
 		if cache.IsNotFoundError(err) {
 			fmt.Println("✓ Correctly handled not found error")
@@ -108,7 +109,7 @@ func main() {
 	// Store multiple diagrams for cleanup demo
 	testDiagrams := []string{"test-diagram-1", "test-diagram-2", "test-diagram-3"}
 	for _, name := range testDiagrams {
-		err := redisCache.StoreDiagram(ctx, name, samplePUMLDiagram, 5*time.Minute)
+		err := redisCache.StoreDiagram(ctx, models.DiagramTypePUML, name, samplePUMLDiagram, 5*time.Minute)
 		if err != nil {
 			log.Printf("Warning: Failed to store test diagram %s: %v", name, err)
 		}
@@ -126,7 +127,7 @@ func main() {
 
 	// Final cleanup - delete the main example diagram
 	fmt.Printf("7. Cleaning up example diagram '%s'...\n", diagramName)
-	err = redisCache.DeleteDiagram(ctx, diagramName)
+	err = redisCache.DeleteDiagram(ctx, models.DiagramTypePUML, diagramName)
 	if err != nil {
 		log.Printf("Warning: Failed to delete diagram: %v", err)
 	} else {

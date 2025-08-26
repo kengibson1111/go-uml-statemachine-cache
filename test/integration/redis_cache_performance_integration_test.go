@@ -28,7 +28,7 @@ func BenchmarkRedisCache_DiagramOperations(b *testing.B) {
 	b.Run("StoreDiagram", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			diagramName := fmt.Sprintf("benchmark-store-%d", i)
-			err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+			err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 			if err != nil {
 				b.Fatalf("StoreDiagram failed: %v", err)
 			}
@@ -38,13 +38,13 @@ func BenchmarkRedisCache_DiagramOperations(b *testing.B) {
 	// Store some diagrams for retrieval benchmark
 	for i := 0; i < 1000; i++ {
 		diagramName := fmt.Sprintf("benchmark-get-%d", i)
-		_ = cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+		_ = cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 	}
 
 	b.Run("GetDiagram", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			diagramName := fmt.Sprintf("benchmark-get-%d", i%1000)
-			_, err := cache.GetDiagram(ctx, diagramName)
+			_, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 			if err != nil {
 				b.Fatalf("GetDiagram failed: %v", err)
 			}
@@ -64,7 +64,7 @@ func BenchmarkRedisCache_StateMachineOperations(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		diagramName := fmt.Sprintf("benchmark-sm-%d", i)
 		content := fmt.Sprintf("@startuml\nstate S%d\n@enduml", i)
-		_ = cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+		_ = cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 	}
 
 	// Create a test state machine
@@ -105,7 +105,7 @@ func BenchmarkRedisCache_StateMachineOperations(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			diagramName := fmt.Sprintf("benchmark-sm-%d", i%1000)
 			stateMachine := createStateMachine(i)
-			err := cache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, time.Hour)
+			err := cache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, diagramName, stateMachine, time.Hour)
 			if err != nil {
 				b.Fatalf("StoreStateMachine failed: %v", err)
 			}
@@ -116,7 +116,7 @@ func BenchmarkRedisCache_StateMachineOperations(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		diagramName := fmt.Sprintf("benchmark-sm-%d", i)
 		stateMachine := createStateMachine(i)
-		_ = cache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, time.Hour)
+		_ = cache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, diagramName, stateMachine, time.Hour)
 	}
 
 	b.Run("GetStateMachine", func(b *testing.B) {
@@ -177,14 +177,14 @@ func TestRedisCache_HighThroughputOperations(t *testing.T) {
 						content := fmt.Sprintf("@startuml\nstate Throughput%d_%d\n@enduml", workerID, operations+int64(j))
 
 						// Store
-						err := cache.StoreDiagram(ctx, diagramName, content, time.Minute)
+						err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Minute)
 						if err != nil {
 							errors++
 							continue
 						}
 
 						// Get
-						_, err = cache.GetDiagram(ctx, diagramName)
+						_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 						if err != nil {
 							errors++
 							continue
@@ -242,13 +242,13 @@ func TestRedisCache_LargePayloadHandling(t *testing.T) {
 			start := time.Now()
 
 			// Store large payload
-			err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+			err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 			require.NoError(t, err)
 			storeTime := time.Since(start)
 
 			// Retrieve large payload
 			start = time.Now()
-			retrieved, err := cache.GetDiagram(ctx, diagramName)
+			retrieved, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 			require.NoError(t, err)
 			getTime := time.Since(start)
 
@@ -295,7 +295,7 @@ func TestRedisCache_TTLPerformance(t *testing.T) {
 				diagramName := fmt.Sprintf("ttl-test-%v-%d", ttl, i)
 				content := fmt.Sprintf("@startuml\nstate TTL%d\n@enduml", i)
 
-				err := cache.StoreDiagram(ctx, diagramName, content, ttl)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, ttl)
 				require.NoError(t, err)
 			}
 
@@ -306,7 +306,7 @@ func TestRedisCache_TTLPerformance(t *testing.T) {
 			start = time.Now()
 			for i := 0; i < numItems; i++ {
 				diagramName := fmt.Sprintf("ttl-test-%v-%d", ttl, i)
-				_, err := cache.GetDiagram(ctx, diagramName)
+				_, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 				require.NoError(t, err)
 			}
 			getTime := time.Since(start)
@@ -321,18 +321,18 @@ func TestRedisCache_TTLPerformance(t *testing.T) {
 		content := "@startuml\nstate Expiring\n@enduml"
 
 		// Store with short TTL
-		err := cache.StoreDiagram(ctx, diagramName, content, shortTTL)
+		err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, shortTTL)
 		require.NoError(t, err)
 
 		// Verify it exists
-		_, err = cache.GetDiagram(ctx, diagramName)
+		_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 		require.NoError(t, err)
 
 		// Wait for expiration
 		time.Sleep(shortTTL + 100*time.Millisecond)
 
 		// Verify it's gone
-		_, err = cache.GetDiagram(ctx, diagramName)
+		_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 		require.Error(t, err)
 		assert.True(t, internal.IsNotFoundError(err))
 	})
@@ -371,14 +371,14 @@ func TestRedisCache_ConcurrentTTLOperations(t *testing.T) {
 				content := fmt.Sprintf("@startuml\nstate ConcurrentTTL%d_%d\n@enduml", goroutineID, j)
 
 				// Store with specific TTL
-				err := cache.StoreDiagram(ctx, diagramName, content, ttl)
+				err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, ttl)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d, item %d: store failed: %w", goroutineID, j, err)
 					continue
 				}
 
 				// Immediately try to retrieve
-				_, err = cache.GetDiagram(ctx, diagramName)
+				_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 				if err != nil {
 					errors <- fmt.Errorf("goroutine %d, item %d: immediate get failed: %w", goroutineID, j, err)
 					continue
@@ -387,7 +387,7 @@ func TestRedisCache_ConcurrentTTLOperations(t *testing.T) {
 				// For short TTLs, test expiration
 				if ttl <= 500*time.Millisecond {
 					time.Sleep(ttl + 100*time.Millisecond)
-					_, err = cache.GetDiagram(ctx, diagramName)
+					_, err = cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 					if err == nil || !internal.IsNotFoundError(err) {
 						errors <- fmt.Errorf("goroutine %d, item %d: expected expiration but item still exists", goroutineID, j)
 					}
@@ -431,7 +431,7 @@ func TestRedisCache_CleanupPerformance(t *testing.T) {
 		diagramName := fmt.Sprintf("cleanup-test-%d", i)
 		content := fmt.Sprintf("@startuml\nstate Cleanup%d\n@enduml", i)
 
-		err := cache.StoreDiagram(ctx, diagramName, content, time.Hour)
+		err := cache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, content, time.Hour)
 		require.NoError(t, err)
 	}
 
@@ -446,7 +446,7 @@ func TestRedisCache_CleanupPerformance(t *testing.T) {
 	// Verify items are gone
 	for i := 0; i < 10; i++ { // Check first 10 items
 		diagramName := fmt.Sprintf("cleanup-test-%d", i)
-		_, err := cache.GetDiagram(ctx, diagramName)
+		_, err := cache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 		assert.Error(t, err)
 		assert.True(t, internal.IsNotFoundError(err))
 	}
