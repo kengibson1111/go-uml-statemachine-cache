@@ -22,12 +22,12 @@ The main interface for all caching operations.
 ```go
 type Cache interface {
     // Diagram operations
-    StoreDiagram(ctx context.Context, name string, pumlContent string, ttl time.Duration) error
-    GetDiagram(ctx context.Context, name string) (string, error)
-    DeleteDiagram(ctx context.Context, name string) error
+    StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, diagContent string, ttl time.Duration) error
+    GetDiagram(ctx context.Context, diagramType models.DiagramType, name string) (string, error)
+    DeleteDiagram(ctx context.Context, diagramType models.DiagramType, name string) error
 
     // State machine operations
-    StoreStateMachine(ctx context.Context, umlVersion, name string, machine *models.StateMachine, ttl time.Duration) error
+    StoreStateMachine(ctx context.Context, umlVersion string, diagramType models.DiagramType, name string, machine *models.StateMachine, ttl time.Duration) error
     GetStateMachine(ctx context.Context, umlVersion, name string) (*models.StateMachine, error)
     DeleteStateMachine(ctx context.Context, umlVersion, name string) error
 
@@ -530,13 +530,13 @@ defer redisCache.Close()
 ctx := context.Background()
 
 // Store diagram
-err = redisCache.StoreDiagram(ctx, "my-diagram", pumlContent, time.Hour)
+err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "my-diagram", pumlContent, time.Hour)
 if err != nil {
     log.Fatal(err)
 }
 
 // Get diagram
-content, err := redisCache.GetDiagram(ctx, "my-diagram")
+content, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "my-diagram")
 if err != nil {
     if cache.IsNotFoundError(err) {
         log.Println("Diagram not found")
@@ -549,7 +549,7 @@ if err != nil {
 ### Error Handling
 
 ```go
-_, err := redisCache.GetDiagram(ctx, "nonexistent")
+_, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "nonexistent")
 if err != nil {
     // Check error type
     if cache.IsNotFoundError(err) {
@@ -589,7 +589,7 @@ fmt.Printf("Response Time: %v\n", health.ResponseTime)
 ### Cache Cleanup
 
 ```go
-// Basic cleanup
+// Basic cleanup for PUML diagrams
 err = redisCache.Cleanup(ctx, "/diagrams/puml/test-*")
 if err != nil {
     log.Fatal(err)

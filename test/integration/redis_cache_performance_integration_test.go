@@ -437,7 +437,7 @@ func TestRedisCache_CleanupPerformance(t *testing.T) {
 
 	// Test cleanup performance
 	start := time.Now()
-	err := cache.Cleanup(ctx, "/diagrams/puml/cleanup-test-*")
+	err := cache.Cleanup(ctx, fmt.Sprintf("/diagrams/%s/cleanup-test-*", models.DiagramTypePUML.String()))
 	require.NoError(t, err)
 	cleanupTime := time.Since(start)
 
@@ -475,7 +475,7 @@ func setupBenchmarkCache(b *testing.B) (*cache.RedisCache, func()) {
 
 	// Cleanup function
 	cleanup := func() {
-		_ = cache.Cleanup(context.Background(), "/diagrams/puml/*")
+		_ = cache.Cleanup(context.Background(), fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()))
 		_ = cache.Cleanup(context.Background(), "/machines/*")
 		_ = cache.Close()
 	}

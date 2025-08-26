@@ -201,7 +201,7 @@ func NewRedisCacheWithDependencies(client internal.RedisClientInterface, keyGen 
 }
 
 // StoreDiagram stores a PlantUML diagram with TTL support
-func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, pumlContent string, ttl time.Duration) error {
+func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, diagContent string, ttl time.Duration) error {
 	// Validate context
 	if err := rc.validator.ValidateContext(ctx); err != nil {
 		return err
@@ -213,7 +213,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.Diagr
 		return err
 	}
 
-	sanitizedContent, err := rc.validator.ValidateAndSanitizeContent(pumlContent, "diagram content")
+	sanitizedContent, err := rc.validator.ValidateAndSanitizeContent(diagContent, "diagram content")
 	if err != nil {
 		return err
 	}
@@ -1265,7 +1265,7 @@ func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) 
 	info.MemoryOverhead = 0 // Not available in new format
 
 	// Get cache-specific statistics by scanning for our key patterns
-	info.DiagramCount = rc.countKeysByPattern(ctx, "/diagrams/puml/*")
+	info.DiagramCount = rc.countKeysByPattern(ctx, fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()))
 	info.StateMachineCount = rc.countKeysByPattern(ctx, "/machines/*")
 	info.EntityCount = rc.countKeysByPattern(ctx, "/machines/*/entities/*")
 

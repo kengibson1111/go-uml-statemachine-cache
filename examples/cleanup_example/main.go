@@ -50,7 +50,7 @@ func main() {
 
 	// Demonstrate basic cleanup
 	fmt.Println("\n3. Performing basic cleanup of test diagrams...")
-	err = redisCache.Cleanup(ctx, "/diagrams/puml/test-*")
+	err = redisCache.Cleanup(ctx, fmt.Sprintf("/diagrams/%s/test-*", models.DiagramTypePUML.String()))
 	if err != nil {
 		log.Fatalf("Basic cleanup failed: %v", err)
 	}

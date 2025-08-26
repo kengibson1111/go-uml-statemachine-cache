@@ -90,7 +90,7 @@ func (kg *DefaultKeyGenerator) ValidateKey(key string) error {
 	}
 
 	// Validate specific key patterns
-	if strings.HasPrefix(key, "/diagrams/puml/") {
+	if strings.HasPrefix(key, fmt.Sprintf("/diagrams/%s/", models.DiagramTypePUML.String())) {
 		return kg.validateDiagramKey(key)
 	} else if strings.HasPrefix(key, "/machines/") {
 		return kg.validateMachineKey(key)
@@ -120,7 +120,7 @@ func (kg *DefaultKeyGenerator) sanitizeName(name string) string {
 // validateDiagramKey validates diagram-specific key format
 func (kg *DefaultKeyGenerator) validateDiagramKey(key string) error {
 	parts := strings.Split(key, "/")
-	if len(parts) != 4 || parts[0] != "" || parts[1] != "diagrams" || parts[2] != "puml" {
+	if len(parts) != 4 || parts[0] != "" || parts[1] != "diagrams" || parts[2] != models.DiagramTypePUML.String() {
 		return fmt.Errorf("invalid diagram key format: %s", key)
 	}
 

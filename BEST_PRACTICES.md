@@ -437,7 +437,7 @@ func scheduleCleanup(redisCache cache.Cache) {
     for range ticker.C {
         ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
         
-        // Clean up old test data
+        // Clean up old PUML test data
         err := redisCache.Cleanup(ctx, "/diagrams/puml/test-*")
         if err != nil {
             log.Printf("Cleanup failed: %v", err)

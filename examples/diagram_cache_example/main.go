@@ -117,7 +117,7 @@ func main() {
 
 	// Clean up test diagrams using pattern
 	fmt.Println("Cleaning up test diagrams...")
-	err = redisCache.Cleanup(ctx, "/diagrams/puml/test-diagram-*")
+	err = redisCache.Cleanup(ctx, fmt.Sprintf("/diagrams/%s/test-diagram-*", models.DiagramTypePUML.String()))
 	if err != nil {
 		log.Printf("Warning: Cleanup failed: %v", err)
 	} else {

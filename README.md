@@ -72,13 +72,13 @@ func main() {
     Error --> Idle : reset
     @enduml`
     
-    err = redisCache.StoreDiagram(ctx, "workflow-diagram", pumlContent, time.Hour)
+    err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "workflow-diagram", pumlContent, time.Hour)
     if err != nil {
         log.Fatal("Failed to store diagram:", err)
     }
     
     // Retrieve the diagram
-    retrieved, err := redisCache.GetDiagram(ctx, "workflow-diagram")
+    retrieved, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "workflow-diagram")
     if err != nil {
         log.Fatal("Failed to retrieve diagram:", err)
     }

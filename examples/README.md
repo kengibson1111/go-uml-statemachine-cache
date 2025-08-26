@@ -196,7 +196,7 @@ if err == nil {
 
 ### Cleanup Automation
 ```go
-// Clean up old entries
+// Clean up old PUML entries
 err = cache.CleanupWithOptions(ctx, "/diagrams/puml/*", &cache.CleanupOptions{
     MaxKeys: 1000,
     DryRun:  false,

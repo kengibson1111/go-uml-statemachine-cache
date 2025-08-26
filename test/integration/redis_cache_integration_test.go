@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -268,7 +269,7 @@ func setupTestCache(t *testing.T) (*cache.RedisCache, func()) {
 	// Cleanup function
 	cleanup := func() {
 		// Clean up any test data
-		_ = cache.Cleanup(context.Background(), "/diagrams/puml/*")
+		_ = cache.Cleanup(context.Background(), fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()))
 		_ = cache.Close()
 	}
 

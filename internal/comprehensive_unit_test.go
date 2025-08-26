@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -434,31 +435,31 @@ func TestKeyGenerator_ComprehensiveEdgeCases(t *testing.T) {
 		}{
 			{
 				name:        "key at maximum length",
-				key:         "/diagrams/puml/" + strings.Repeat("a", 233), // Total length = 250
+				key:         fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), strings.Repeat("a", 233)), // Total length = 250
 				expectValid: true,
 				description: "key at maximum length should be valid",
 			},
 			{
 				name:        "key over maximum length",
-				key:         "/diagrams/puml/" + strings.Repeat("a", 236), // Total length = 251
+				key:         fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), strings.Repeat("a", 236)), // Total length = 251
 				expectValid: false,
 				description: "key over maximum length should be invalid",
 			},
 			{
 				name:        "key with only allowed characters",
-				key:         "/diagrams/puml/abcABC123-_.%",
+				key:         fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), "abcABC123-_.%"),
 				expectValid: true,
 				description: "key with only allowed characters should be valid",
 			},
 			{
 				name:        "key with path traversal in middle",
-				key:         "/diagrams/../puml/test",
+				key:         fmt.Sprintf("/diagrams/../%s/test", models.DiagramTypePUML.String()),
 				expectValid: false,
 				description: "path traversal in middle should be invalid",
 			},
 			{
 				name:        "key with encoded path traversal",
-				key:         "/diagrams/puml/..%2F..%2Fetc%2Fpasswd",
+				key:         fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), "..%2F..%2Fetc%2Fpasswd"),
 				expectValid: true, // URL encoded is allowed
 				description: "encoded path traversal should be valid (encoded)",
 			},
@@ -954,7 +955,7 @@ func BenchmarkKeyGeneration(b *testing.B) {
 	})
 
 	b.Run("ValidateKey", func(b *testing.B) {
-		key := "/diagrams/puml/test-diagram"
+		key := fmt.Sprintf("/diagrams/%s/test-diagram", models.DiagramTypePUML.String())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_ = kg.ValidateKey(key)

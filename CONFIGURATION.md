@@ -167,7 +167,7 @@ fmt.Printf("Total keys: %d\n", sizeInfo.TotalKeys)
 
 // Implement cleanup strategy
 if sizeInfo.MemoryUsed > 1024*1024*1024 { // 1GB
-    // Cleanup old entries
+    // Cleanup old PUML entries
     err = redisCache.Cleanup(ctx, "/diagrams/puml/old-*")
 }
 ```
@@ -775,7 +775,7 @@ config := &cache.RedisConfig{
 
 2. **Implement cleanup strategies**:
    ```go
-   // Regular cleanup of old entries
+   // Regular cleanup of old PUML entries
    go func() {
        ticker := time.NewTicker(1 * time.Hour)
        for range ticker.C {

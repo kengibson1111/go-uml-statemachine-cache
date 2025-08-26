@@ -44,10 +44,10 @@ The example will:
 ### State Machine Storage
 ```go
 // Diagram must be stored first
-err = redisCache.StoreDiagram(ctx, diagramName, pumlContent, ttl)
+err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, pumlContent, ttl)
 
 // Then store the state machine (entities are automatically extracted)
-err = redisCache.StoreStateMachine(ctx, umlVersion, diagramName, stateMachine, ttl)
+err = redisCache.StoreStateMachine(ctx, umlVersion, models.DiagramTypePUML, diagramName, stateMachine, ttl)
 ```
 
 ### Entity Retrieval

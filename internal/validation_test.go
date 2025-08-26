@@ -2,10 +2,12 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -504,7 +506,7 @@ func TestInputValidator_ValidateCleanupPattern(t *testing.T) {
 		},
 		{
 			name:        "valid diagram pattern",
-			pattern:     "/diagrams/puml/test*",
+			pattern:     fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			expectError: false,
 		},
 		{

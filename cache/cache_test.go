@@ -11,7 +11,7 @@ import (
 // MockCache is a simple mock implementation of the Cache interface for testing
 type MockCache struct{}
 
-func (m *MockCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, pumlContent string, ttl time.Duration) error {
+func (m *MockCache) StoreDiagram(ctx context.Context, diagramType models.DiagramType, name string, diagContent string, ttl time.Duration) error {
 	return nil
 }
 

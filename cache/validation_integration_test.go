@@ -293,13 +293,13 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 		},
 		{
 			name:        "nil options",
-			pattern:     "/diagrams/puml/test*",
+			pattern:     fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			options:     nil,
 			expectError: false, // Should use defaults
 		},
 		{
 			name:    "invalid batch size",
-			pattern: "/diagrams/puml/test*",
+			pattern: fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			options: &CleanupOptions{
 				BatchSize:      -1,
 				ScanCount:      100,
@@ -313,7 +313,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 		},
 		{
 			name:    "batch size too large",
-			pattern: "/diagrams/puml/test*",
+			pattern: fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			options: &CleanupOptions{
 				BatchSize:      1001,
 				ScanCount:      100,
@@ -327,7 +327,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 		},
 		{
 			name:    "timeout too large",
-			pattern: "/diagrams/puml/test*",
+			pattern: fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			options: &CleanupOptions{
 				BatchSize:      100,
 				ScanCount:      100,
@@ -341,7 +341,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 		},
 		{
 			name:        "valid pattern and options",
-			pattern:     "/diagrams/puml/test*",
+			pattern:     fmt.Sprintf("/diagrams/%s/test*", models.DiagramTypePUML.String()),
 			options:     DefaultCleanupOptions(),
 			expectError: false,
 		},
@@ -531,7 +531,7 @@ func TestRedisCache_EnhancedValidation_InputSanitization(t *testing.T) {
 
 			// Test content sanitization
 			if strings.Contains(tt.name, "content") {
-				expectedKey := "/diagrams/puml/test"
+				expectedKey := fmt.Sprintf("/diagrams/%s/test", models.DiagramTypePUML.String())
 				mockKeyGen.On("DiagramKey", "test").Return(expectedKey)
 				mockKeyGen.On("ValidateKey", expectedKey).Return(nil)
 				mockClient.On("SetWithRetry", ctx, expectedKey, tt.expectedOutput, mock.Anything).Return(nil)

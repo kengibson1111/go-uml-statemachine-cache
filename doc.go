@@ -12,7 +12,7 @@
 // # Architecture
 //
 // The cache system uses a hierarchical key structure in Redis:
-//   - PlantUML Diagrams: /diagrams/puml/<diagram_name>
+//   - PlantUML Diagrams: /diagrams/<diagram_type>/<diagram_name>
 //   - Parsed State Machines: /machines/<uml_version>/<diagram_name>
 //   - State Machine Entities: /machines/<uml_version>/<diagram_name>/entities/<entity_id>
 //
@@ -38,13 +38,13 @@
 //	@enduml`
 //
 //	// Store diagram with 1 hour TTL
-//	err = redisCache.StoreDiagram(ctx, "my-diagram", pumlContent, time.Hour)
+//	err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, "my-diagram", pumlContent, time.Hour)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //
 //	// Retrieve diagram
-//	retrieved, err := redisCache.GetDiagram(ctx, "my-diagram")
+//	retrieved, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, "my-diagram")
 //	if err != nil {
 //	    if cache.IsNotFoundError(err) {
 //	        log.Println("Diagram not found")

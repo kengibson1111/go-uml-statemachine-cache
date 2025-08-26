@@ -53,7 +53,7 @@ The example will show:
 
 The example uses various Redis key patterns:
 
-- `/diagrams/puml/test-*` - Test diagram keys
+- `/diagrams/puml/test-*` - Test PUML diagram keys
 - `/machines/test-*` - Test state machine keys  
 - `/test-*` - General test keys
 

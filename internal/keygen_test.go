@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,6 +20,8 @@ func TestNewKeyGenerator(t *testing.T) {
 
 func TestDiagramKey(t *testing.T) {
 	kg := NewKeyGenerator()
+	specialChars := "diagram-with-special%3Achars"
+	unicode := "%D0%B4%D0%B8%D0%B0%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B0"
 
 	tests := []struct {
 		name     string
@@ -28,32 +31,32 @@ func TestDiagramKey(t *testing.T) {
 		{
 			name:     "simple name",
 			input:    "simple",
-			expected: "/diagrams/puml/simple",
+			expected: fmt.Sprintf("/diagrams/%s/simple", models.DiagramTypePUML.String()),
 		},
 		{
 			name:     "name with spaces",
 			input:    "my diagram",
-			expected: "/diagrams/puml/my_diagram",
+			expected: fmt.Sprintf("/diagrams/%s/my_diagram", models.DiagramTypePUML.String()),
 		},
 		{
 			name:     "name with special characters",
 			input:    "diagram/with\\special:chars",
-			expected: "/diagrams/puml/diagram-with-special%3Achars",
+			expected: fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), specialChars),
 		},
 		{
 			name:     "name with dots",
 			input:    "diagram.v1.0",
-			expected: "/diagrams/puml/diagram.v1.0",
+			expected: fmt.Sprintf("/diagrams/%s/diagram.v1.0", models.DiagramTypePUML.String()),
 		},
 		{
 			name:     "empty name",
 			input:    "",
-			expected: "/diagrams/puml/",
+			expected: fmt.Sprintf("/diagrams/%s/", models.DiagramTypePUML.String()),
 		},
 		{
 			name:     "name with unicode",
 			input:    "диаграмма",
-			expected: "/diagrams/puml/%D0%B4%D0%B8%D0%B0%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B0",
+			expected: fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), unicode),
 		},
 	}
 
@@ -166,9 +169,9 @@ func TestValidateKey(t *testing.T) {
 	kg := NewKeyGenerator()
 
 	validKeys := []string{
-		"/diagrams/puml/simple",
-		"/diagrams/puml/my_diagram",
-		"/diagrams/puml/diagram.v1.0",
+		fmt.Sprintf("/diagrams/%s/simple", models.DiagramTypePUML.String()),
+		fmt.Sprintf("/diagrams/%s/my_diagram", models.DiagramTypePUML.String()),
+		fmt.Sprintf("/diagrams/%s/diagram.v1.0", models.DiagramTypePUML.String()),
 		"/machines/2.5/simple",
 		"/machines/version_2.5/my_diagram",
 		"/machines/2.5/simple/entities/state1",
@@ -197,15 +200,15 @@ func TestValidateKey(t *testing.T) {
 			expectedError: "key must start with '/'",
 		},
 		{
-			key:           "/diagrams/puml/name with spaces",
+			key:           fmt.Sprintf("/diagrams/%s/name with spaces", models.DiagramTypePUML.String()),
 			expectedError: "key contains invalid characters",
 		},
 		{
-			key:           "/diagrams//puml/double-slash",
+			key:           fmt.Sprintf("/diagrams//%s/double-slash", models.DiagramTypePUML.String()),
 			expectedError: "key contains double slashes",
 		},
 		{
-			key:           "/diagrams/puml/" + strings.Repeat("a", 250),
+			key:           fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), strings.Repeat("a", 250)),
 			expectedError: "key exceeds maximum length",
 		},
 		{
@@ -213,7 +216,7 @@ func TestValidateKey(t *testing.T) {
 			expectedError: "key does not match any expected pattern",
 		},
 		{
-			key:           "/diagrams/puml/",
+			key:           fmt.Sprintf("/diagrams/%s/", models.DiagramTypePUML.String()),
 			expectedError: "diagram name cannot be empty",
 		},
 		{
@@ -383,6 +386,7 @@ func TestKeyGeneratorConsistency(t *testing.T) {
 
 func TestValidateKeyEdgeCases(t *testing.T) {
 	kg := NewKeyGenerator()
+	encodedSpaces := "file%20with%20encoded%20spaces"
 
 	// Additional edge cases for comprehensive validation
 	edgeCases := []struct {
@@ -391,7 +395,7 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 		description   string
 	}{
 		{
-			key:           "/diagrams/puml/file%20with%20encoded%20spaces",
+			key:           fmt.Sprintf("/diagrams/%s/%s", models.DiagramTypePUML.String(), encodedSpaces),
 			shouldBeValid: true,
 			description:   "URL encoded spaces should be valid",
 		},
@@ -406,7 +410,7 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 			description:   "URL encoded colons should be valid",
 		},
 		{
-			key:           "/diagrams/puml/diagram.with.dots",
+			key:           fmt.Sprintf("/diagrams/%s/diagram.with.dots", models.DiagramTypePUML.String()),
 			shouldBeValid: true,
 			description:   "Dots should be valid in keys",
 		},
@@ -416,62 +420,62 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 			description:   "Underscores should be valid in keys",
 		},
 		{
-			key:           "/diagrams/puml/diagram-with-dashes",
+			key:           fmt.Sprintf("/diagrams/%s/diagram-with-dashes", models.DiagramTypePUML.String()),
 			shouldBeValid: true,
 			description:   "Dashes should be valid in keys",
 		},
 		{
-			key:           "/diagrams/puml/UPPERCASE",
+			key:           fmt.Sprintf("/diagrams/%s/UPPERCASE", models.DiagramTypePUML.String()),
 			shouldBeValid: true,
 			description:   "Uppercase letters should be valid",
 		},
 		{
-			key:           "/diagrams/puml/123numeric",
+			key:           fmt.Sprintf("/diagrams/%s/123numeric", models.DiagramTypePUML.String()),
 			shouldBeValid: true,
 			description:   "Numeric characters should be valid",
 		},
 		{
-			key:           "/diagrams/puml/mixed123_CASE-with.dots",
+			key:           fmt.Sprintf("/diagrams/%s/mixed123_CASE-with.dots", models.DiagramTypePUML.String()),
 			shouldBeValid: true,
 			description:   "Mixed alphanumeric with allowed special chars should be valid",
 		},
 		{
-			key:           "/diagrams/puml/name\twith\ttabs",
+			key:           fmt.Sprintf("/diagrams/%s/name\twith\ttabs", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Tab characters should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name\nwith\nnewlines",
+			key:           fmt.Sprintf("/diagrams/%s/name\nwith\nnewlines", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Newline characters should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name with unencoded spaces",
+			key:           fmt.Sprintf("/diagrams/%s/name with unencoded spaces", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Unencoded spaces should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name|with|pipes",
+			key:           fmt.Sprintf("/diagrams/%s/name|with|pipes", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Pipe characters should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name<with>brackets",
+			key:           fmt.Sprintf("/diagrams/%s/name<with>brackets", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Angle brackets should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name\"with\"quotes",
+			key:           fmt.Sprintf("/diagrams/%s/name\"with\"quotes", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Quote characters should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name*with*asterisks",
+			key:           fmt.Sprintf("/diagrams/%s/name*with*asterisks", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Asterisk characters should be invalid",
 		},
 		{
-			key:           "/diagrams/puml/name?with?questions",
+			key:           fmt.Sprintf("/diagrams/%s/name?with?questions", models.DiagramTypePUML.String()),
 			shouldBeValid: false,
 			description:   "Question mark characters should be invalid",
 		},
@@ -580,23 +584,23 @@ func TestKeyValidationSecurity(t *testing.T) {
 		description string
 	}{
 		{
-			key:         "/diagrams/puml/../../../etc/passwd",
+			key:         fmt.Sprintf("/diagrams/%s/../../../etc/passwd", models.DiagramTypePUML.String()),
 			description: "Path traversal attempts should be invalid",
 		},
 		{
-			key:         "/diagrams/puml/..\\..\\windows\\system32",
+			key:         fmt.Sprintf("/diagrams/%s/..\\..\\windows\\system32", models.DiagramTypePUML.String()),
 			description: "Windows path traversal should be invalid",
 		},
 		{
-			key:         "/diagrams/puml/name\x00with\x00nulls",
+			key:         fmt.Sprintf("/diagrams/%s/name\x00with\x00nulls", models.DiagramTypePUML.String()),
 			description: "Null bytes should be invalid",
 		},
 		{
-			key:         "/diagrams/puml/name\x01\x02\x03control",
+			key:         fmt.Sprintf("/diagrams/%s/name\x01\x02\x03control", models.DiagramTypePUML.String()),
 			description: "Control characters should be invalid",
 		},
 		{
-			key:         "/diagrams/puml/name\x7fwith\x7fdelete",
+			key:         fmt.Sprintf("/diagrams/%s/name\x7fwith\x7fdelete", models.DiagramTypePUML.String()),
 			description: "Delete character should be invalid",
 		},
 	}

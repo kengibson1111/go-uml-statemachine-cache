@@ -3,9 +3,11 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,19 +25,19 @@ func TestRedisCache_Cleanup_Basic(t *testing.T) {
 	}{
 		{
 			name:        "successful cleanup with pattern",
-			pattern:     "/diagrams/puml/*",
+			pattern:     fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()),
 			expectError: false,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock the scan operation
-				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/puml/*", int64(100)).Return(
-					[]string{"/diagrams/puml/test1", "/diagrams/puml/test2"}, uint64(0), nil)
+				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()), int64(100)).Return(
+					[]string{fmt.Sprintf("/diagrams/%s/test1", models.DiagramTypePUML.String()), fmt.Sprintf("/diagrams/%s/test2", models.DiagramTypePUML.String())}, uint64(0), nil)
 
 				// Mock memory usage for metrics (default cleanup options have CollectMetrics=true)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/test1").Return(int64(100), nil)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/test2").Return(int64(150), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, fmt.Sprintf("/diagrams/%s/test1", models.DiagramTypePUML.String())).Return(int64(100), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, fmt.Sprintf("/diagrams/%s/test2", models.DiagramTypePUML.String())).Return(int64(150), nil)
 
 				// Mock the delete operation
-				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/diagrams/puml/test1", "/diagrams/puml/test2"}).Return(int64(2), nil)
+				mockClient.On("DelBatchWithRetry", mock.Anything, []string{fmt.Sprintf("/diagrams/%s/test1", models.DiagramTypePUML.String()), fmt.Sprintf("/diagrams/%s/test2", models.DiagramTypePUML.String())}).Return(int64(2), nil)
 			},
 		},
 		{
@@ -120,15 +122,21 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation
 				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(50)).Return(
-					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3"}, uint64(0), nil)
+					[]string{
+						fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key3", models.DiagramTypePUML.String())}, uint64(0), nil)
 
 				// Mock memory usage for metrics
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key1").Return(int64(100), nil)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key2").Return(int64(150), nil)
-				mockClient.On("MemoryUsageWithRetry", mock.Anything, "/diagrams/puml/key3").Return(int64(200), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String())).Return(int64(100), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String())).Return(int64(150), nil)
+				mockClient.On("MemoryUsageWithRetry", mock.Anything, fmt.Sprintf("/diagrams/%s/key3", models.DiagramTypePUML.String())).Return(int64(200), nil)
 
 				// Mock delete operation
-				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3"}).Return(int64(3), nil)
+				mockClient.On("DelBatchWithRetry", mock.Anything, []string{
+					fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String()),
+					fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String()),
+					fmt.Sprintf("/diagrams/%s/key3", models.DiagramTypePUML.String())}).Return(int64(3), nil)
 			},
 		},
 		{
@@ -151,7 +159,9 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation
 				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(100)).Return(
-					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2"}, uint64(0), nil)
+					[]string{
+						fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String())}, uint64(0), nil)
 
 				// No delete mocks needed for dry run
 			},
@@ -187,10 +197,16 @@ func TestRedisCache_CleanupWithOptions(t *testing.T) {
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock scan operation - returns more keys than max
 				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/*", int64(100)).Return(
-					[]string{"/diagrams/puml/key1", "/diagrams/puml/key2", "/diagrams/puml/key3", "/diagrams/puml/key4"}, uint64(0), nil)
+					[]string{
+						fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key3", models.DiagramTypePUML.String()),
+						fmt.Sprintf("/diagrams/%s/key4", models.DiagramTypePUML.String())}, uint64(0), nil)
 
 				// Mock delete operation - should only delete first 2 keys
-				mockClient.On("DelBatchWithRetry", mock.Anything, []string{"/diagrams/puml/key1", "/diagrams/puml/key2"}).Return(int64(2), nil)
+				mockClient.On("DelBatchWithRetry", mock.Anything, []string{
+					fmt.Sprintf("/diagrams/%s/key1", models.DiagramTypePUML.String()),
+					fmt.Sprintf("/diagrams/%s/key2", models.DiagramTypePUML.String())}).Return(int64(2), nil)
 			},
 		},
 	}
@@ -259,7 +275,7 @@ func TestRedisCache_GetCacheSize(t *testing.T) {
 
 				// Mock scan operations for counting different key types
 				// Diagrams
-				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/diagrams/puml/*", int64(100)).Return(
+				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), fmt.Sprintf("/diagrams/%s/*", models.DiagramTypePUML.String()), int64(100)).Return(
 					make([]string, 25), uint64(0), nil)
 
 				// State machines

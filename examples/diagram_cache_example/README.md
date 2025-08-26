@@ -46,12 +46,12 @@ config.DefaultTTL = 1 * time.Hour
 
 ### Storing Diagrams
 ```go
-err = redisCache.StoreDiagram(ctx, diagramName, pumlContent, 30*time.Minute)
+err = redisCache.StoreDiagram(ctx, models.DiagramTypePUML, diagramName, pumlContent, 30*time.Minute)
 ```
 
 ### Retrieving Diagrams
 ```go
-diagram, err := redisCache.GetDiagram(ctx, diagramName)
+diagram, err := redisCache.GetDiagram(ctx, models.DiagramTypePUML, diagramName)
 ```
 
 ### Error Handling
@@ -61,7 +61,7 @@ if cache.IsNotFoundError(err) {
 }
 ```
 
-### Cleanup
+### Cleanup for PUML diagrams
 ```go
 err = redisCache.Cleanup(ctx, "/diagrams/puml/pattern-*")
 ```
