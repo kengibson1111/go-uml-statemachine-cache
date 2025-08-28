@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -250,15 +251,15 @@ func TestRedisCache_ReferentialIntegrity_PartialStorageFailure(t *testing.T) {
 
 		// Setup mocks for entity key generation - first entity key validation fails
 		mockKeyGen.On("EntityKey", "1.0", "TestMachine", "region-1").Return("/invalid/entity/key")
-		mockKeyGen.On("ValidateKey", "/invalid/entity/key").Return(NewKeyInvalidError("/invalid/entity/key", "invalid key format"))
+		mockKeyGen.On("ValidateKey", "/invalid/entity/key").Return(internal.NewKeyInvalidError("/invalid/entity/key", "invalid key format"))
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
 		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "TestMachine", sampleStateMachine, time.Hour)
 		require.Error(t, err)
-		cacheErr, ok := err.(*CacheError)
-		require.True(t, ok, "Expected CacheError, got %T", err)
-		assert.Equal(t, CacheErrorTypeKeyInvalid, cacheErr.Type)
+		cacheErr, ok := err.(*Error)
+		require.True(t, ok, "Expected Error, got %T", err)
+		assert.Equal(t, ErrorTypeKeyInvalid, cacheErr.Type)
 		assert.Contains(t, err.Error(), "invalid entity key generated for 'region-1'")
 
 		mockClient.AssertExpectations(t)
@@ -531,15 +532,15 @@ func TestRedisCache_ReferentialIntegrity_EntityKeyValidation(t *testing.T) {
 
 		// Setup mock for entity key generation - return invalid key
 		mockKeyGen.On("EntityKey", "1.0", "TestMachineValidation", "region-1").Return("/invalid/entity/key")
-		mockKeyGen.On("ValidateKey", "/invalid/entity/key").Return(NewKeyInvalidError("/invalid/entity/key", "invalid key format"))
+		mockKeyGen.On("ValidateKey", "/invalid/entity/key").Return(internal.NewKeyInvalidError("/invalid/entity/key", "invalid key format"))
 
 		cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
 		err := cache.StoreStateMachine(ctx, "1.0", models.DiagramTypePUML, "TestMachineValidation", sampleStateMachine, time.Hour)
 		require.Error(t, err)
-		cacheErr, ok := err.(*CacheError)
-		require.True(t, ok, "Expected CacheError, got %T", err)
-		assert.Equal(t, CacheErrorTypeKeyInvalid, cacheErr.Type)
+		cacheErr, ok := err.(*Error)
+		require.True(t, ok, "Expected Error, got %T", err)
+		assert.Equal(t, ErrorTypeKeyInvalid, cacheErr.Type)
 		assert.Contains(t, err.Error(), "invalid entity key generated for 'region-1'")
 
 		mockClient.AssertExpectations(t)

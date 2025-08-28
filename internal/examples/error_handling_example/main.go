@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kengibson1111/go-uml-statemachine-cache/cache"
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
@@ -34,7 +35,7 @@ func main() {
 		if cache.IsValidationError(err) {
 			fmt.Printf("   Validation error detected: %v\n", err)
 			fmt.Printf("   Error severity: %v\n", cache.GetErrorSeverity(err))
-			fmt.Printf("   Recovery strategy: %v\n", cache.GetRecoveryStrategy(err))
+			fmt.Printf("   Recovery strategy: %v\n", internal.GetRecoveryStrategy(err))
 		}
 	}
 
@@ -45,7 +46,7 @@ func main() {
 		if cache.IsNotFoundError(err) {
 			fmt.Printf("   Not found error detected: %v\n", err)
 			fmt.Printf("   Error severity: %v\n", cache.GetErrorSeverity(err))
-			fmt.Printf("   Recovery strategy: %v\n", cache.GetRecoveryStrategy(err))
+			fmt.Printf("   Recovery strategy: %v\n", internal.GetRecoveryStrategy(err))
 		}
 	}
 
@@ -61,8 +62,8 @@ func main() {
 		},
 	}
 
-	enhancedErr := cache.NewCacheErrorWithContext(
-		cache.CacheErrorTypeTimeout,
+	enhancedErr := internal.NewCacheErrorWithContext(
+		cache.ErrorTypeTimeout,
 		"test-diagram",
 		"operation timed out during storage",
 		fmt.Errorf("context deadline exceeded"),
@@ -76,16 +77,16 @@ func main() {
 
 	// Example 4: Demonstrate circuit breaker functionality
 	fmt.Println("\n4. Circuit Breaker Example:")
-	cbConfig := cache.DefaultCircuitBreakerConfig()
+	cbConfig := internal.DefaultCircuitBreakerConfig()
 	cbConfig.FailureThreshold = 2
 	cbConfig.RecoveryTimeout = 1 * time.Second
 
-	erm := cache.NewErrorRecoveryManager(cbConfig)
+	erm := internal.NewErrorRecoveryManager(cbConfig)
 
 	// Simulate failures to open circuit breaker
 	for i := 0; i < 3; i++ {
 		err := erm.ExecuteWithRecovery("test-operation", func() error {
-			return cache.NewConnectionError("simulated connection failure", nil)
+			return internal.NewConnectionError("simulated connection failure", nil)
 		})
 		fmt.Printf("   Attempt %d: %v\n", i+1, err)
 	}
@@ -100,30 +101,30 @@ func main() {
 
 	// Example 5: Demonstrate retry logic
 	fmt.Println("\n5. Retry Logic Example:")
-	connectionErr := cache.NewConnectionError("connection failed", nil)
+	connectionErr := internal.NewConnectionError("connection failed", nil)
 	shouldRetry, delay := erm.ShouldRetry(connectionErr, "get-operation", 1)
 	fmt.Printf("   Connection error should retry: %v (delay: %v)\n", shouldRetry, delay)
 
-	validationErr := cache.NewValidationError("invalid input", nil)
+	validationErr := internal.NewValidationError("invalid input", nil)
 	shouldRetry, delay = erm.ShouldRetry(validationErr, "set-operation", 1)
 	fmt.Printf("   Validation error should retry: %v (delay: %v)\n", shouldRetry, delay)
 
 	// Example 6: Demonstrate error categorization
 	fmt.Println("\n6. Error Categorization Example:")
 	errors := []error{
-		cache.NewConnectionError("connection failed", nil),
-		cache.NewTimeoutError("timeout-key", "operation timed out", nil),
-		cache.NewValidationError("invalid input", nil),
-		cache.NewNotFoundError("missing-key"),
-		cache.NewRetryExhaustedError("failed-operation", 5, nil),
-		cache.NewCircuitOpenError("blocked-operation"),
+		internal.NewConnectionError("connection failed", nil),
+		internal.NewTimeoutError("timeout-key", "operation timed out", nil),
+		internal.NewValidationError("invalid input", nil),
+		internal.NewNotFoundError("missing-key"),
+		internal.NewRetryExhaustedError("failed-operation", 5, nil),
+		internal.NewCircuitOpenError("blocked-operation"),
 	}
 
 	for _, err := range errors {
 		fmt.Printf("   Error: %v\n", err)
 		fmt.Printf("     - Severity: %v\n", cache.GetErrorSeverity(err))
 		fmt.Printf("     - Retryable: %v\n", cache.IsRetryableError(err))
-		fmt.Printf("     - Recovery: %v\n", cache.GetRecoveryStrategy(err))
+		fmt.Printf("     - Recovery: %v\n", internal.GetRecoveryStrategy(err))
 		fmt.Println()
 	}
 

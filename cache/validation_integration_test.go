@@ -23,7 +23,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 		content     string
 		ttl         time.Duration
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 	}{
 		{
 			name:        "empty diagram name",
@@ -32,7 +32,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "empty content",
@@ -41,7 +41,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     "",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "negative TTL",
@@ -50,7 +50,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         -time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "diagram name with special characters",
@@ -67,7 +67,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     "@startuml\n<script>alert('xss')</script>\n@enduml",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "diagram name too long",
@@ -76,7 +76,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "content too large",
@@ -85,7 +85,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 			content:     strings.Repeat("a", 1024*1024+1),
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "valid inputs",
@@ -120,7 +120,7 @@ func TestRedisCache_EnhancedValidation_StoreDiagram(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
-				if cacheErr, ok := err.(*CacheError); ok {
+				if cacheErr, ok := err.(*Error); ok {
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {
@@ -153,7 +153,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 		machine     *models.StateMachine
 		ttl         time.Duration
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 	}{
 		{
 			name:        "empty UML version",
@@ -163,7 +163,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     validMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "empty machine name",
@@ -173,7 +173,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     validMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "nil machine",
@@ -183,7 +183,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     nil,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "invalid version format",
@@ -193,7 +193,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     validMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "machine name with path traversal",
@@ -203,7 +203,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     validMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "TTL too large",
@@ -213,7 +213,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 			machine:     validMachine,
 			ttl:         400 * 24 * time.Hour, // More than 1 year
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 	}
 
@@ -250,7 +250,7 @@ func TestRedisCache_EnhancedValidation_StoreStateMachine(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
-				if cacheErr, ok := err.(*CacheError); ok {
+				if cacheErr, ok := err.(*Error); ok {
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {
@@ -268,28 +268,28 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 		pattern     string
 		options     *CleanupOptions
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 	}{
 		{
 			name:        "empty pattern",
 			pattern:     "",
 			options:     DefaultCleanupOptions(),
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "dangerous wildcard pattern",
 			pattern:     "*",
 			options:     DefaultCleanupOptions(),
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "pattern without valid prefix",
 			pattern:     "/invalid/test*",
 			options:     DefaultCleanupOptions(),
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "nil options",
@@ -309,7 +309,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 				CollectMetrics: true,
 			},
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:    "batch size too large",
@@ -323,7 +323,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 				CollectMetrics: true,
 			},
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:    "timeout too large",
@@ -337,7 +337,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 				CollectMetrics: true,
 			},
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 		},
 		{
 			name:        "valid pattern and options",
@@ -362,7 +362,7 @@ func TestRedisCache_EnhancedValidation_CleanupWithOptions(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
-				if cacheErr, ok := err.(*CacheError); ok {
+				if cacheErr, ok := err.(*Error); ok {
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {

@@ -13,151 +13,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// types and funcs for external use.
+// Configuration types for external use
 type RedisConfig = internal.Config
 type RedisRetryConfig = internal.RetryConfig
-type CacheErrorType = internal.ErrorType
-type CacheError = internal.CacheError
-type ErrorContext = internal.ErrorContext
-type ErrorSeverity = internal.ErrorSeverity
-type RecoveryStrategy = internal.RecoveryStrategy
-type CircuitBreakerConfig = internal.CircuitBreakerConfig
-type ErrorRecoveryManager = internal.ErrorRecoveryManager
-
-const (
-	// ErrorTypeConnection indicates a Redis connection error
-	CacheErrorTypeConnection CacheErrorType = internal.ErrorTypeConnection
-	// ErrorTypeKeyInvalid indicates an invalid cache key
-	CacheErrorTypeKeyInvalid = internal.ErrorTypeKeyInvalid
-	// ErrorTypeNotFound indicates a cache miss or key not found
-	CacheErrorTypeNotFound = internal.ErrorTypeNotFound
-	// ErrorTypeSerialization indicates JSON marshaling/unmarshaling error
-	CacheErrorTypeSerialization = internal.ErrorTypeSerialization
-	// ErrorTypeTimeout indicates a timeout during cache operation
-	CacheErrorTypeTimeout = internal.ErrorTypeTimeout
-	// ErrorTypeCapacity indicates cache capacity or memory issues
-	CacheErrorTypeCapacity = internal.ErrorTypeCapacity
-	// ErrorTypeValidation indicates input validation failure
-	CacheErrorTypeValidation = internal.ErrorTypeValidation
-	// ErrorTypeRetryExhausted indicates all retry attempts have been exhausted
-	CacheErrorTypeRetryExhausted = internal.ErrorTypeRetryExhausted
-	// ErrorTypeCircuitOpen indicates circuit breaker is open
-	CacheErrorTypeCircuitOpen = internal.ErrorTypeCircuitOpen
-
-	// Error severity levels
-	SeverityLow      ErrorSeverity = internal.SeverityLow
-	SeverityMedium   ErrorSeverity = internal.SeverityMedium
-	SeverityHigh     ErrorSeverity = internal.SeverityHigh
-	SeverityCritical ErrorSeverity = internal.SeverityCritical
-
-	// Recovery strategies
-	RecoveryStrategyFail             RecoveryStrategy = internal.RecoveryStrategyFail
-	RecoveryStrategyIgnore           RecoveryStrategy = internal.RecoveryStrategyIgnore
-	RecoveryStrategyRetryWithBackoff RecoveryStrategy = internal.RecoveryStrategyRetryWithBackoff
-	RecoveryStrategyRetryWithDelay   RecoveryStrategy = internal.RecoveryStrategyRetryWithDelay
-	RecoveryStrategyCircuitBreaker   RecoveryStrategy = internal.RecoveryStrategyCircuitBreaker
-	RecoveryStrategyWaitAndRetry     RecoveryStrategy = internal.RecoveryStrategyWaitAndRetry
-)
-
-// NewCacheError creates a new CacheError
-func NewCacheError(errType CacheErrorType, key, message string, cause error) *CacheError {
-	return internal.NewCacheError(errType, key, message, cause)
-}
-
-// NewConnectionError creates a connection-specific cache error
-func NewConnectionError(message string, cause error) *CacheError {
-	return internal.NewConnectionError(message, cause)
-}
-
-// NewKeyInvalidError creates a key validation error
-func NewKeyInvalidError(key, message string) *CacheError {
-	return internal.NewKeyInvalidError(key, message)
-}
-
-// NewNotFoundError creates a not found error
-func NewNotFoundError(key string) *CacheError {
-	return internal.NewNotFoundError(key)
-}
-
-// NewSerializationError creates a serialization error
-func NewSerializationError(key, message string, cause error) *CacheError {
-	return internal.NewSerializationError(key, message, cause)
-}
-
-// NewTimeoutError creates a timeout error
-func NewTimeoutError(key, message string, cause error) *CacheError {
-	return internal.NewTimeoutError(key, message, cause)
-}
-
-// NewValidationError creates a validation error
-func NewValidationError(message string, cause error) *CacheError {
-	return internal.NewValidationError(message, cause)
-}
-
-// IsConnectionError checks if the error is a connection error
-func IsConnectionError(err error) bool {
-	return internal.IsConnectionError(err)
-}
-
-// IsNotFoundError checks if the error is a not found error
-func IsNotFoundError(err error) bool {
-	return internal.IsNotFoundError(err)
-}
-
-// IsValidationError checks if the error is a validation error
-func IsValidationError(err error) bool {
-	return internal.IsValidationError(err)
-}
-
-// IsRetryExhaustedError checks if the error is a retry exhausted error
-func IsRetryExhaustedError(err error) bool {
-	return internal.IsRetryExhaustedError(err)
-}
-
-// IsCircuitOpenError checks if the error is a circuit open error
-func IsCircuitOpenError(err error) bool {
-	return internal.IsCircuitOpenError(err)
-}
-
-// IsRetryableError checks if the error should trigger retry logic
-func IsRetryableError(err error) bool {
-	return internal.IsRetryableError(err)
-}
-
-// GetErrorSeverity returns the severity level of an error
-func GetErrorSeverity(err error) ErrorSeverity {
-	return internal.GetErrorSeverity(err)
-}
-
-// GetRecoveryStrategy returns the recommended recovery strategy for an error
-func GetRecoveryStrategy(err error) RecoveryStrategy {
-	return internal.GetRecoveryStrategy(err)
-}
-
-// NewCacheErrorWithContext creates a new CacheError with detailed context
-func NewCacheErrorWithContext(errType CacheErrorType, key, message string, cause error, context *ErrorContext) *CacheError {
-	return internal.NewCacheErrorWithContext(errType, key, message, cause, context)
-}
-
-// NewRetryExhaustedError creates a retry exhausted error
-func NewRetryExhaustedError(operation string, attempts int, lastError error) *CacheError {
-	return internal.NewRetryExhaustedError(operation, attempts, lastError)
-}
-
-// NewCircuitOpenError creates a circuit breaker open error
-func NewCircuitOpenError(operation string) *CacheError {
-	return internal.NewCircuitOpenError(operation)
-}
-
-// DefaultCircuitBreakerConfig returns default circuit breaker configuration
-func DefaultCircuitBreakerConfig() *CircuitBreakerConfig {
-	return internal.DefaultCircuitBreakerConfig()
-}
-
-// NewErrorRecoveryManager creates a new error recovery manager
-func NewErrorRecoveryManager(config *CircuitBreakerConfig) *ErrorRecoveryManager {
-	return internal.NewErrorRecoveryManager(config)
-}
 
 func DefaultRedisConfig() *RedisConfig {
 	return internal.DefaultConfig()
@@ -228,7 +86,7 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.Diagr
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Use default TTL if not specified
@@ -240,10 +98,10 @@ func (rc *RedisCache) StoreDiagram(ctx context.Context, diagramType models.Diagr
 	err = rc.client.SetWithRetry(ctx, key, sanitizedContent, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout storing diagram", err)
+			return internal.NewTimeoutError(key, "timeout storing diagram", err)
 		}
 		if isConnectionError(err) {
-			return NewConnectionError("failed to store diagram", err)
+			return internal.NewConnectionError("failed to store diagram", err)
 		}
 		return fmt.Errorf("failed to store diagram '%s': %w", sanitizedName, err)
 	}
@@ -269,20 +127,20 @@ func (rc *RedisCache) GetDiagram(ctx context.Context, diagramType models.Diagram
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return "", NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return "", internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the diagram content from Redis
 	content, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return "", NewNotFoundError(key)
+			return "", internal.NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return "", NewTimeoutError(key, "timeout retrieving diagram", err)
+			return "", internal.NewTimeoutError(key, "timeout retrieving diagram", err)
 		}
 		if isConnectionError(err) {
-			return "", NewConnectionError("failed to retrieve diagram", err)
+			return "", internal.NewConnectionError("failed to retrieve diagram", err)
 		}
 		return "", fmt.Errorf("failed to retrieve diagram '%s': %w", sanitizedName, err)
 	}
@@ -308,17 +166,17 @@ func (rc *RedisCache) DeleteDiagram(ctx context.Context, diagramType models.Diag
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Delete the diagram from Redis
 	err = rc.client.DelWithRetry(ctx, key)
 	if err != nil {
 		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout deleting diagram", err)
+			return internal.NewTimeoutError(key, "timeout deleting diagram", err)
 		}
 		if isConnectionError(err) {
-			return NewConnectionError("failed to delete diagram", err)
+			return internal.NewConnectionError("failed to delete diagram", err)
 		}
 		return fmt.Errorf("failed to delete diagram '%s': %w", sanitizedName, err)
 	}
@@ -357,7 +215,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, 
 	_, err = rc.GetDiagram(ctx, diagramType, sanitizedName)
 	if err != nil {
 		if IsNotFoundError(err) {
-			return NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", sanitizedName), err)
+			return internal.NewValidationError(fmt.Sprintf("cannot store state machine: corresponding diagram '%s' does not exist", sanitizedName), err)
 		}
 		return fmt.Errorf("failed to validate diagram existence for state machine '%s': %w", sanitizedName, err)
 	}
@@ -367,7 +225,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, 
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Use default TTL if not specified
@@ -410,7 +268,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, 
 
 		// Validate entity key before storing
 		if err := rc.keyGen.ValidateKey(entityKey); err != nil {
-			return NewKeyInvalidError(entityKey, fmt.Sprintf("invalid entity key generated for '%s': %v", entityID, err))
+			return internal.NewKeyInvalidError(entityKey, fmt.Sprintf("invalid entity key generated for '%s': %v", entityID, err))
 		}
 
 		// Update the Entities mapping for referential integrity
@@ -430,7 +288,7 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, 
 	if err != nil {
 		// Clean up entities if state machine serialization fails
 		rc.cleanupPartialEntityStorage(ctx, sanitizedVersion, sanitizedName, machine.Entities)
-		return NewSerializationError(key, "failed to marshal state machine", err)
+		return internal.NewSerializationError(key, "failed to marshal state machine", err)
 	}
 
 	// Store the serialized state machine in Redis
@@ -440,10 +298,10 @@ func (rc *RedisCache) StoreStateMachine(ctx context.Context, umlVersion string, 
 		rc.cleanupPartialEntityStorage(ctx, sanitizedVersion, sanitizedName, machine.Entities)
 
 		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout storing state machine", err)
+			return internal.NewTimeoutError(key, "timeout storing state machine", err)
 		}
 		if isConnectionError(err) {
-			return NewConnectionError("failed to store state machine", err)
+			return internal.NewConnectionError("failed to store state machine", err)
 		}
 		return fmt.Errorf("failed to store state machine '%s': %w", sanitizedName, err)
 	}
@@ -474,20 +332,20 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return nil, NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return nil, internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the serialized state machine from Redis
 	data, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, NewNotFoundError(key)
+			return nil, internal.NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return nil, NewTimeoutError(key, "timeout retrieving state machine", err)
+			return nil, internal.NewTimeoutError(key, "timeout retrieving state machine", err)
 		}
 		if isConnectionError(err) {
-			return nil, NewConnectionError("failed to retrieve state machine", err)
+			return nil, internal.NewConnectionError("failed to retrieve state machine", err)
 		}
 		return nil, fmt.Errorf("failed to retrieve state machine '%s': %w", sanitizedName, err)
 	}
@@ -496,7 +354,7 @@ func (rc *RedisCache) GetStateMachine(ctx context.Context, umlVersion, name stri
 	var machine models.StateMachine
 	err = json.Unmarshal([]byte(data), &machine)
 	if err != nil {
-		return nil, NewSerializationError(key, "failed to unmarshal state machine", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal state machine", err)
 	}
 
 	return &machine, nil
@@ -525,7 +383,7 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// First, try to retrieve the state machine to get entity information for cascade deletion
@@ -577,10 +435,10 @@ func (rc *RedisCache) DeleteStateMachine(ctx context.Context, umlVersion, name s
 		err = rc.client.DelWithRetry(ctx, keysToDelete...)
 		if err != nil {
 			if isTimeoutError(err) {
-				return NewTimeoutError(key, "timeout deleting state machine and entities", err)
+				return internal.NewTimeoutError(key, "timeout deleting state machine and entities", err)
 			}
 			if isConnectionError(err) {
-				return NewConnectionError("failed to delete state machine and entities", err)
+				return internal.NewConnectionError("failed to delete state machine and entities", err)
 			}
 			return fmt.Errorf("failed to delete state machine '%s' and its entities: %w", sanitizedName, err)
 		}
@@ -659,13 +517,13 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Serialize the entity to JSON
 	data, err := json.Marshal(entity)
 	if err != nil {
-		return NewSerializationError(key, "failed to marshal entity", err)
+		return internal.NewSerializationError(key, "failed to marshal entity", err)
 	}
 
 	// Use default TTL if not specified
@@ -677,10 +535,10 @@ func (rc *RedisCache) StoreEntity(ctx context.Context, umlVersion, diagramName, 
 	err = rc.client.SetWithRetry(ctx, key, data, ttl)
 	if err != nil {
 		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout storing entity", err)
+			return internal.NewTimeoutError(key, "timeout storing entity", err)
 		}
 		if isConnectionError(err) {
-			return NewConnectionError("failed to store entity", err)
+			return internal.NewConnectionError("failed to store entity", err)
 		}
 		return fmt.Errorf("failed to store entity '%s': %w", sanitizedEntityID, err)
 	}
@@ -718,7 +576,7 @@ func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVe
 
 	if operation == "add" {
 		if entityKey == "" {
-			return NewValidationError("entity key cannot be empty for add operation", nil)
+			return internal.NewValidationError("entity key cannot be empty for add operation", nil)
 		}
 		sanitizedEntityKey, err := rc.validator.ValidateAndSanitizeString(entityKey, "entity key")
 		if err != nil {
@@ -750,16 +608,16 @@ func (rc *RedisCache) UpdateStateMachineEntityMapping(ctx context.Context, umlVe
 	key := rc.keyGen.StateMachineKey(sanitizedVersion, sanitizedName)
 	data, err := json.Marshal(machine)
 	if err != nil {
-		return NewSerializationError(key, "failed to marshal updated state machine", err)
+		return internal.NewSerializationError(key, "failed to marshal updated state machine", err)
 	}
 
 	err = rc.client.SetWithRetry(ctx, key, data, rc.config.DefaultTTL)
 	if err != nil {
 		if isTimeoutError(err) {
-			return NewTimeoutError(key, "timeout updating state machine entity mapping", err)
+			return internal.NewTimeoutError(key, "timeout updating state machine entity mapping", err)
 		}
 		if isConnectionError(err) {
-			return NewConnectionError("failed to update state machine entity mapping", err)
+			return internal.NewConnectionError("failed to update state machine entity mapping", err)
 		}
 		return fmt.Errorf("failed to update state machine entity mapping: %w", err)
 	}
@@ -858,20 +716,20 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 
 	// Validate the generated key
 	if err := rc.keyGen.ValidateKey(key); err != nil {
-		return nil, NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
+		return nil, internal.NewKeyInvalidError(key, fmt.Sprintf("invalid key generated: %v", err))
 	}
 
 	// Retrieve the serialized entity from Redis
 	data, err := rc.client.GetWithRetry(ctx, key)
 	if err != nil {
 		if err == redis.Nil {
-			return nil, NewNotFoundError(key)
+			return nil, internal.NewNotFoundError(key)
 		}
 		if isTimeoutError(err) {
-			return nil, NewTimeoutError(key, "timeout retrieving entity", err)
+			return nil, internal.NewTimeoutError(key, "timeout retrieving entity", err)
 		}
 		if isConnectionError(err) {
-			return nil, NewConnectionError("failed to retrieve entity", err)
+			return nil, internal.NewConnectionError("failed to retrieve entity", err)
 		}
 		return nil, fmt.Errorf("failed to retrieve entity '%s': %w", sanitizedEntityID, err)
 	}
@@ -880,7 +738,7 @@ func (rc *RedisCache) GetEntity(ctx context.Context, umlVersion, diagramName, en
 	var entity interface{}
 	err = json.Unmarshal([]byte(data), &entity)
 	if err != nil {
-		return nil, NewSerializationError(key, "failed to unmarshal entity", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal entity", err)
 	}
 
 	return entity, nil
@@ -897,14 +755,14 @@ func (rc *RedisCache) GetEntityAsState(ctx context.Context, umlVersion, diagramN
 	data, err := json.Marshal(entity)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+		return nil, internal.NewSerializationError(key, "failed to marshal entity for type conversion", err)
 	}
 
 	var state models.State
 	err = json.Unmarshal(data, &state)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to unmarshal entity as State", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal entity as State", err)
 	}
 
 	return &state, nil
@@ -921,14 +779,14 @@ func (rc *RedisCache) GetEntityAsTransition(ctx context.Context, umlVersion, dia
 	data, err := json.Marshal(entity)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+		return nil, internal.NewSerializationError(key, "failed to marshal entity for type conversion", err)
 	}
 
 	var transition models.Transition
 	err = json.Unmarshal(data, &transition)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to unmarshal entity as Transition", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal entity as Transition", err)
 	}
 
 	return &transition, nil
@@ -945,14 +803,14 @@ func (rc *RedisCache) GetEntityAsRegion(ctx context.Context, umlVersion, diagram
 	data, err := json.Marshal(entity)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+		return nil, internal.NewSerializationError(key, "failed to marshal entity for type conversion", err)
 	}
 
 	var region models.Region
 	err = json.Unmarshal(data, &region)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to unmarshal entity as Region", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal entity as Region", err)
 	}
 
 	return &region, nil
@@ -969,14 +827,14 @@ func (rc *RedisCache) GetEntityAsVertex(ctx context.Context, umlVersion, diagram
 	data, err := json.Marshal(entity)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to marshal entity for type conversion", err)
+		return nil, internal.NewSerializationError(key, "failed to marshal entity for type conversion", err)
 	}
 
 	var vertex models.Vertex
 	err = json.Unmarshal(data, &vertex)
 	if err != nil {
 		key := rc.keyGen.EntityKey(umlVersion, diagramName, entityID)
-		return nil, NewSerializationError(key, "failed to unmarshal entity as Vertex", err)
+		return nil, internal.NewSerializationError(key, "failed to unmarshal entity as Vertex", err)
 	}
 
 	return &vertex, nil
@@ -1048,7 +906,7 @@ func (rc *RedisCache) CleanupWithOptions(ctx context.Context, pattern string, op
 		// Check for context cancellation
 		select {
 		case <-cleanupCtx.Done():
-			return nil, NewTimeoutError("", "cleanup operation timed out during scan", cleanupCtx.Err())
+			return nil, internal.NewTimeoutError("", "cleanup operation timed out during scan", cleanupCtx.Err())
 		default:
 		}
 
@@ -1056,10 +914,10 @@ func (rc *RedisCache) CleanupWithOptions(ctx context.Context, pattern string, op
 		if err != nil {
 			result.ErrorsOccurred++
 			if isTimeoutError(err) {
-				return result, NewTimeoutError("", "timeout during cleanup scan", err)
+				return result, internal.NewTimeoutError("", "timeout during cleanup scan", err)
 			}
 			if isConnectionError(err) {
-				return result, NewConnectionError("failed to scan for cleanup", err)
+				return result, internal.NewConnectionError("failed to scan for cleanup", err)
 			}
 			return result, fmt.Errorf("failed to scan keys for cleanup: %w", err)
 		}
@@ -1131,37 +989,37 @@ func (rc *RedisCache) validateCleanupOptions(options *CleanupOptions) error {
 // validateCleanupOptionsEnhanced validates cleanup options with enhanced security checks
 func (rc *RedisCache) validateCleanupOptionsEnhanced(options *CleanupOptions) error {
 	if options == nil {
-		return NewValidationError("cleanup options cannot be nil", nil)
+		return internal.NewValidationError("cleanup options cannot be nil", nil)
 	}
 
 	if options.BatchSize <= 0 {
-		return NewValidationError(fmt.Sprintf("batch size must be positive, got %d", options.BatchSize), nil)
+		return internal.NewValidationError(fmt.Sprintf("batch size must be positive, got %d", options.BatchSize), nil)
 	}
 
 	if options.BatchSize > 1000 {
-		return NewValidationError(fmt.Sprintf("batch size too large (max 1000), got %d", options.BatchSize), nil)
+		return internal.NewValidationError(fmt.Sprintf("batch size too large (max 1000), got %d", options.BatchSize), nil)
 	}
 
 	if options.ScanCount <= 0 {
-		return NewValidationError(fmt.Sprintf("scan count must be positive, got %d", options.ScanCount), nil)
+		return internal.NewValidationError(fmt.Sprintf("scan count must be positive, got %d", options.ScanCount), nil)
 	}
 
 	if options.ScanCount > 10000 {
-		return NewValidationError(fmt.Sprintf("scan count too large (max 10000), got %d", options.ScanCount), nil)
+		return internal.NewValidationError(fmt.Sprintf("scan count too large (max 10000), got %d", options.ScanCount), nil)
 	}
 
 	if options.MaxKeys < 0 {
-		return NewValidationError(fmt.Sprintf("max keys cannot be negative, got %d", options.MaxKeys), nil)
+		return internal.NewValidationError(fmt.Sprintf("max keys cannot be negative, got %d", options.MaxKeys), nil)
 	}
 
 	if options.Timeout < 0 {
-		return NewValidationError(fmt.Sprintf("timeout cannot be negative, got %v", options.Timeout), nil)
+		return internal.NewValidationError(fmt.Sprintf("timeout cannot be negative, got %v", options.Timeout), nil)
 	}
 
 	// Check for reasonable timeout limits
 	maxTimeout := 30 * time.Minute
 	if options.Timeout > maxTimeout {
-		return NewValidationError(fmt.Sprintf("timeout exceeds maximum allowed duration of %v", options.Timeout), nil)
+		return internal.NewValidationError(fmt.Sprintf("timeout exceeds maximum allowed duration of %v", options.Timeout), nil)
 	}
 
 	return nil
@@ -1178,7 +1036,7 @@ func (rc *RedisCache) deleteKeysInBatches(ctx context.Context, keys []string, op
 		// Check for context cancellation
 		select {
 		case <-ctx.Done():
-			return totalDeleted, totalBytesFreed, batchCount, NewTimeoutError("", "cleanup operation timed out during deletion", ctx.Err())
+			return totalDeleted, totalBytesFreed, batchCount, internal.NewTimeoutError("", "cleanup operation timed out during deletion", ctx.Err())
 		default:
 		}
 
@@ -1208,10 +1066,10 @@ func (rc *RedisCache) deleteKeysInBatches(ctx context.Context, keys []string, op
 		deletedInBatch, err := rc.client.DelBatchWithRetry(ctx, batch...)
 		if err != nil {
 			if isTimeoutError(err) {
-				return totalDeleted, totalBytesFreed, batchCount, NewTimeoutError("", "timeout during batch deletion", err)
+				return totalDeleted, totalBytesFreed, batchCount, internal.NewTimeoutError("", "timeout during batch deletion", err)
 			}
 			if isConnectionError(err) {
-				return totalDeleted, totalBytesFreed, batchCount, NewConnectionError("failed to delete batch during cleanup", err)
+				return totalDeleted, totalBytesFreed, batchCount, internal.NewConnectionError("failed to delete batch during cleanup", err)
 			}
 			return totalDeleted, totalBytesFreed, batchCount, fmt.Errorf("failed to delete batch during cleanup: %w", err)
 		}
@@ -1234,10 +1092,10 @@ func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) 
 	dbSize, err := rc.client.DBSizeWithRetry(ctx)
 	if err != nil {
 		if isTimeoutError(err) {
-			return nil, NewTimeoutError("", "timeout getting database size", err)
+			return nil, internal.NewTimeoutError("", "timeout getting database size", err)
 		}
 		if isConnectionError(err) {
-			return nil, NewConnectionError("failed to get database size", err)
+			return nil, internal.NewConnectionError("failed to get database size", err)
 		}
 		return nil, fmt.Errorf("failed to get database size: %w", err)
 	}
@@ -1247,10 +1105,10 @@ func (rc *RedisCache) GetCacheSize(ctx context.Context) (*CacheSizeInfo, error) 
 	memInfo, err := rc.client.InfoWithRetry(ctx, "memory")
 	if err != nil {
 		if isTimeoutError(err) {
-			return nil, NewTimeoutError("", "timeout getting memory info", err)
+			return nil, internal.NewTimeoutError("", "timeout getting memory info", err)
 		}
 		if isConnectionError(err) {
-			return nil, NewConnectionError("failed to get memory info", err)
+			return nil, internal.NewConnectionError("failed to get memory info", err)
 		}
 		return nil, fmt.Errorf("failed to get memory info: %w", err)
 	}

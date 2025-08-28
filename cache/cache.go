@@ -303,13 +303,72 @@ type Cache interface {
 
 // Re-export key types and functions for public API
 
-// KeyGenerator defines the interface for generating and validating cache keys
-type KeyGenerator = internal.KeyGenerator
+// ErrorType represents the type of cache error
+type ErrorType = internal.ErrorType
 
-// DefaultKeyGenerator implements the KeyGenerator interface
-type DefaultKeyGenerator = internal.DefaultKeyGenerator
+// Error type constants
+const (
+	ErrorTypeConnection     = internal.ErrorTypeConnection
+	ErrorTypeKeyInvalid     = internal.ErrorTypeKeyInvalid
+	ErrorTypeNotFound       = internal.ErrorTypeNotFound
+	ErrorTypeSerialization  = internal.ErrorTypeSerialization
+	ErrorTypeTimeout        = internal.ErrorTypeTimeout
+	ErrorTypeCapacity       = internal.ErrorTypeCapacity
+	ErrorTypeValidation     = internal.ErrorTypeValidation
+	ErrorTypeRetryExhausted = internal.ErrorTypeRetryExhausted
+	ErrorTypeCircuitOpen    = internal.ErrorTypeCircuitOpen
+)
 
-// NewKeyGenerator creates a new DefaultKeyGenerator instance
-func NewKeyGenerator() KeyGenerator {
-	return internal.NewKeyGenerator()
+// ErrorSeverity represents the severity level of an error
+type ErrorSeverity = internal.ErrorSeverity
+
+// Error severity constants
+const (
+	SeverityLow      = internal.SeverityLow
+	SeverityMedium   = internal.SeverityMedium
+	SeverityHigh     = internal.SeverityHigh
+	SeverityCritical = internal.SeverityCritical
+)
+
+// ErrorContext provides additional context information for errors
+type ErrorContext = internal.ErrorContext
+
+// Error represents a cache-specific error with detailed context
+type Error = internal.CacheError
+
+// Error checking utility functions
+
+// IsConnectionError checks if the error is a connection error
+func IsConnectionError(err error) bool {
+	return internal.IsConnectionError(err)
+}
+
+// IsNotFoundError checks if the error is a not found error
+func IsNotFoundError(err error) bool {
+	return internal.IsNotFoundError(err)
+}
+
+// IsValidationError checks if the error is a validation error
+func IsValidationError(err error) bool {
+	return internal.IsValidationError(err)
+}
+
+// IsRetryExhaustedError checks if the error is a retry exhausted error
+func IsRetryExhaustedError(err error) bool {
+	return internal.IsRetryExhaustedError(err)
+}
+
+// IsCircuitOpenError checks if the error is a circuit open error
+func IsCircuitOpenError(err error) bool {
+	return internal.IsCircuitOpenError(err)
+}
+
+// IsRetryableError checks if the error should trigger retry logic
+func IsRetryableError(err error) bool {
+	return internal.IsRetryableError(err)
+}
+
+// GetErrorSeverity returns the severity level of an error
+func GetErrorSeverity(err error) ErrorSeverity {
+	return internal.GetErrorSeverity(err)
 }

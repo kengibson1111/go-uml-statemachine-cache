@@ -20,7 +20,7 @@ func TestRedisCache_Cleanup_Basic(t *testing.T) {
 		name        string
 		pattern     string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -44,7 +44,7 @@ func TestRedisCache_Cleanup_Basic(t *testing.T) {
 			name:        "empty pattern validation error",
 			pattern:     "",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -53,7 +53,7 @@ func TestRedisCache_Cleanup_Basic(t *testing.T) {
 			name:        "scan timeout error",
 			pattern:     "/machines/*",
 			expectError: true,
-			errorType:   CacheErrorTypeTimeout,
+			errorType:   ErrorTypeTimeout,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock timeout error during scan
 				mockClient.On("ScanWithRetry", mock.Anything, uint64(0), "/machines/*", int64(100)).Return(
@@ -77,8 +77,8 @@ func TestRedisCache_Cleanup_Basic(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {

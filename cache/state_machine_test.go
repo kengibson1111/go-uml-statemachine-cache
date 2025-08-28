@@ -56,7 +56,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 		machine     *models.StateMachine
 		ttl         time.Duration
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -134,7 +134,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -147,7 +147,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -160,7 +160,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			machine:     nil,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed - validation should catch nil and return early
 			},
@@ -173,7 +173,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			machine:     sampleStateMachine,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// Mock diagram existence check - diagram not found
 				diagramKey := fmt.Sprintf("/diagrams/%s/NonExistentDiagram", models.DiagramTypePUML.String())
@@ -232,13 +232,13 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					// Handle both direct CacheError and wrapped errors
-					var cacheErr *CacheError
-					if directErr, ok := err.(*CacheError); ok {
+					// Handle both direct Error and wrapped errors
+					var cacheErr *Error
+					if directErr, ok := err.(*Error); ok {
 						cacheErr = directErr
 					} else {
-						// For wrapped errors, check if the underlying error is a CacheError
-						var unwrappedErr *CacheError
+						// For wrapped errors, check if the underlying error is a Error
+						var unwrappedErr *Error
 						if errors.As(err, &unwrappedErr) {
 							cacheErr = unwrappedErr
 						}
@@ -255,7 +255,7 @@ func TestRedisCache_StoreStateMachine(t *testing.T) {
 						if tt.name == "nil state machine" {
 							assert.Contains(t, err.Error(), "state machine")
 						} else {
-							require.True(t, false, "expected CacheError or wrapped CacheError, got %T: %v", err, err)
+							require.True(t, false, "expected Error or wrapped Error, got %T: %v", err, err)
 						}
 					}
 				}
@@ -307,7 +307,7 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 		umlVersion  string
 		machineName string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		expected    *models.StateMachine
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
@@ -332,7 +332,7 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 			umlVersion:  "1.0",
 			machineName: "NonExistentMachine",
 			expectError: true,
-			errorType:   CacheErrorTypeNotFound,
+			errorType:   ErrorTypeNotFound,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				expectedKey := "/machines/1.0/NonExistentMachine"
 				mockKeyGen.On("StateMachineKey", "1.0", "NonExistentMachine").Return(expectedKey)
@@ -345,7 +345,7 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 			umlVersion:  "",
 			machineName: "TestMachine",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -355,7 +355,7 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 			umlVersion:  "1.0",
 			machineName: "",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -392,8 +392,8 @@ func TestRedisCache_GetStateMachine(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 				assert.Nil(t, machine)
@@ -432,7 +432,7 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 		umlVersion  string
 		machineName string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -496,7 +496,7 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 			umlVersion:  "",
 			machineName: "TestMachine",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -506,7 +506,7 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 			umlVersion:  "1.0",
 			machineName: "",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -528,8 +528,8 @@ func TestRedisCache_DeleteStateMachine(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {
@@ -743,9 +743,9 @@ func TestRedisCache_GetStateMachine_DeserializationError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, machine)
-	cacheErr, ok := err.(*CacheError)
-	require.True(t, ok, "expected CacheError, got %T", err)
-	assert.Equal(t, CacheErrorTypeSerialization, cacheErr.Type)
+	cacheErr, ok := err.(*Error)
+	require.True(t, ok, "expected Error, got %T", err)
+	assert.Equal(t, ErrorTypeSerialization, cacheErr.Type)
 
 	mockClient.AssertExpectations(t)
 	mockKeyGen.AssertExpectations(t)

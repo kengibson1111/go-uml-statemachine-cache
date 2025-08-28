@@ -25,7 +25,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 		entity      interface{}
 		ttl         time.Duration
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -68,7 +68,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 			entity:      &models.State{},
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -81,7 +81,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 			entity:      &models.State{},
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -94,7 +94,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 			entity:      &models.State{},
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -107,7 +107,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 			entity:      nil,
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -129,7 +129,7 @@ func TestRedisCache_StoreEntity(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
+					cacheErr, ok := err.(*Error)
 					require.True(t, ok, "Expected CacheError, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
@@ -161,7 +161,7 @@ func TestRedisCache_GetEntity(t *testing.T) {
 		diagramName string
 		entityID    string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 		expected    interface{}
 	}{
@@ -187,7 +187,7 @@ func TestRedisCache_GetEntity(t *testing.T) {
 			diagramName: "TestDiagram",
 			entityID:    "nonexistent",
 			expectError: true,
-			errorType:   CacheErrorTypeNotFound,
+			errorType:   ErrorTypeNotFound,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				expectedKey := "/machines/1.0/TestDiagram/entities/nonexistent"
 				mockKeyGen.On("EntityKey", "1.0", "TestDiagram", "nonexistent").Return(expectedKey)
@@ -201,7 +201,7 @@ func TestRedisCache_GetEntity(t *testing.T) {
 			diagramName: "TestDiagram",
 			entityID:    "state-1",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -223,7 +223,7 @@ func TestRedisCache_GetEntity(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
+					cacheErr, ok := err.(*Error)
 					require.True(t, ok, "Expected CacheError, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}

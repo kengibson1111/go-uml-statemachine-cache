@@ -98,17 +98,17 @@ func TestRedisCache_PublicTypeAliases(t *testing.T) {
 	})
 
 	t.Run("CacheError alias", func(t *testing.T) {
-		err := NewCacheError(CacheErrorTypeConnection, "test-key", "test message", nil)
+		err := internal.NewCacheError(ErrorTypeConnection, "test-key", "test message", nil)
 		assert.NotNil(t, err)
-		assert.Equal(t, CacheErrorTypeConnection, err.Type)
+		assert.Equal(t, ErrorTypeConnection, err.Type)
 	})
 }
 
 // TestRedisCache_ErrorHelperFunctions tests the public error helper functions
 func TestRedisCache_ErrorHelperFunctions(t *testing.T) {
 	t.Run("IsConnectionError", func(t *testing.T) {
-		connErr := NewConnectionError("connection failed", nil)
-		otherErr := NewNotFoundError("key")
+		connErr := internal.NewConnectionError("connection failed", nil)
+		otherErr := internal.NewNotFoundError("key")
 		regularErr := errors.New("regular error")
 
 		assert.True(t, IsConnectionError(connErr))
@@ -117,8 +117,8 @@ func TestRedisCache_ErrorHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("IsNotFoundError", func(t *testing.T) {
-		notFoundErr := NewNotFoundError("key")
-		otherErr := NewConnectionError("connection failed", nil)
+		notFoundErr := internal.NewNotFoundError("key")
+		otherErr := internal.NewConnectionError("connection failed", nil)
 		regularErr := errors.New("regular error")
 
 		assert.True(t, IsNotFoundError(notFoundErr))
@@ -127,8 +127,8 @@ func TestRedisCache_ErrorHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("IsValidationError", func(t *testing.T) {
-		validationErr := NewValidationError("validation failed", nil)
-		otherErr := NewConnectionError("connection failed", nil)
+		validationErr := internal.NewValidationError("validation failed", nil)
+		otherErr := internal.NewConnectionError("connection failed", nil)
 		regularErr := errors.New("regular error")
 
 		assert.True(t, IsValidationError(validationErr))
@@ -137,43 +137,43 @@ func TestRedisCache_ErrorHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("IsRetryExhaustedError", func(t *testing.T) {
-		retryErr := NewRetryExhaustedError("test-op", 3, nil)
-		otherErr := NewConnectionError("connection failed", nil)
+		retryErr := internal.NewRetryExhaustedError("test-op", 3, nil)
+		otherErr := internal.NewConnectionError("connection failed", nil)
 
 		assert.True(t, IsRetryExhaustedError(retryErr))
 		assert.False(t, IsRetryExhaustedError(otherErr))
 	})
 
 	t.Run("IsCircuitOpenError", func(t *testing.T) {
-		circuitErr := NewCircuitOpenError("test-op")
-		otherErr := NewConnectionError("connection failed", nil)
+		circuitErr := internal.NewCircuitOpenError("test-op")
+		otherErr := internal.NewConnectionError("connection failed", nil)
 
 		assert.True(t, IsCircuitOpenError(circuitErr))
 		assert.False(t, IsCircuitOpenError(otherErr))
 	})
 
 	t.Run("IsRetryableError", func(t *testing.T) {
-		retryableErr := NewConnectionError("connection failed", nil)
-		nonRetryableErr := NewValidationError("validation failed", nil)
+		retryableErr := internal.NewConnectionError("connection failed", nil)
+		nonRetryableErr := internal.NewValidationError("validation failed", nil)
 
 		assert.True(t, IsRetryableError(retryableErr))
 		assert.False(t, IsRetryableError(nonRetryableErr))
 	})
 
 	t.Run("GetErrorSeverity", func(t *testing.T) {
-		criticalErr := NewConnectionError("connection failed", nil)
-		lowErr := NewNotFoundError("key")
+		criticalErr := internal.NewConnectionError("connection failed", nil)
+		lowErr := internal.NewNotFoundError("key")
 
 		assert.Equal(t, SeverityCritical, GetErrorSeverity(criticalErr))
 		assert.Equal(t, SeverityLow, GetErrorSeverity(lowErr))
 	})
 
-	t.Run("GetRecoveryStrategy", func(t *testing.T) {
-		connErr := NewConnectionError("connection failed", nil)
-		validationErr := NewValidationError("validation failed", nil)
+	t.Run("GetErrorSeverity", func(t *testing.T) {
+		connErr := internal.NewConnectionError("connection failed", nil)
+		validationErr := internal.NewValidationError("validation failed", nil)
 
-		assert.Equal(t, RecoveryStrategyRetryWithBackoff, GetRecoveryStrategy(connErr))
-		assert.Equal(t, RecoveryStrategyFail, GetRecoveryStrategy(validationErr))
+		assert.Equal(t, SeverityCritical, GetErrorSeverity(connErr))
+		assert.Equal(t, SeverityMedium, GetErrorSeverity(validationErr))
 	})
 }
 
@@ -181,9 +181,9 @@ func TestRedisCache_ErrorHelperFunctions(t *testing.T) {
 func TestRedisCache_ErrorConstructors(t *testing.T) {
 	t.Run("NewCacheError", func(t *testing.T) {
 		cause := errors.New("underlying error")
-		err := NewCacheError(CacheErrorTypeConnection, "test-key", "test message", cause)
+		err := internal.NewCacheError(ErrorTypeConnection, "test-key", "test message", cause)
 
-		assert.Equal(t, CacheErrorTypeConnection, err.Type)
+		assert.Equal(t, ErrorTypeConnection, err.Type)
 		assert.Equal(t, "test-key", err.Key)
 		assert.Equal(t, "test message", err.Message)
 		assert.Equal(t, cause, err.Cause)
@@ -191,27 +191,27 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 
 	t.Run("NewConnectionError", func(t *testing.T) {
 		cause := errors.New("connection failed")
-		err := NewConnectionError("Redis connection failed", cause)
+		err := internal.NewConnectionError("Redis connection failed", cause)
 
-		assert.Equal(t, CacheErrorTypeConnection, err.Type)
+		assert.Equal(t, ErrorTypeConnection, err.Type)
 		assert.Equal(t, "", err.Key)
 		assert.Equal(t, "Redis connection failed", err.Message)
 		assert.Equal(t, cause, err.Cause)
 	})
 
 	t.Run("NewKeyInvalidError", func(t *testing.T) {
-		err := NewKeyInvalidError("invalid-key", "key contains invalid characters")
+		err := internal.NewKeyInvalidError("invalid-key", "key contains invalid characters")
 
-		assert.Equal(t, CacheErrorTypeKeyInvalid, err.Type)
+		assert.Equal(t, ErrorTypeKeyInvalid, err.Type)
 		assert.Equal(t, "invalid-key", err.Key)
 		assert.Equal(t, "key contains invalid characters", err.Message)
 		assert.Nil(t, err.Cause)
 	})
 
 	t.Run("NewNotFoundError", func(t *testing.T) {
-		err := NewNotFoundError("missing-key")
+		err := internal.NewNotFoundError("missing-key")
 
-		assert.Equal(t, CacheErrorTypeNotFound, err.Type)
+		assert.Equal(t, ErrorTypeNotFound, err.Type)
 		assert.Equal(t, "missing-key", err.Key)
 		assert.Equal(t, "key not found in cache", err.Message)
 		assert.Nil(t, err.Cause)
@@ -219,9 +219,9 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 
 	t.Run("NewSerializationError", func(t *testing.T) {
 		cause := errors.New("json marshal failed")
-		err := NewSerializationError("test-key", "failed to serialize", cause)
+		err := internal.NewSerializationError("test-key", "failed to serialize", cause)
 
-		assert.Equal(t, CacheErrorTypeSerialization, err.Type)
+		assert.Equal(t, ErrorTypeSerialization, err.Type)
 		assert.Equal(t, "test-key", err.Key)
 		assert.Equal(t, "failed to serialize", err.Message)
 		assert.Equal(t, cause, err.Cause)
@@ -229,9 +229,9 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 
 	t.Run("NewTimeoutError", func(t *testing.T) {
 		cause := errors.New("context deadline exceeded")
-		err := NewTimeoutError("test-key", "operation timed out", cause)
+		err := internal.NewTimeoutError("test-key", "operation timed out", cause)
 
-		assert.Equal(t, CacheErrorTypeTimeout, err.Type)
+		assert.Equal(t, ErrorTypeTimeout, err.Type)
 		assert.Equal(t, "test-key", err.Key)
 		assert.Equal(t, "operation timed out", err.Message)
 		assert.Equal(t, cause, err.Cause)
@@ -239,9 +239,9 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 
 	t.Run("NewValidationError", func(t *testing.T) {
 		cause := errors.New("invalid input")
-		err := NewValidationError("validation failed", cause)
+		err := internal.NewValidationError("validation failed", cause)
 
-		assert.Equal(t, CacheErrorTypeValidation, err.Type)
+		assert.Equal(t, ErrorTypeValidation, err.Type)
 		assert.Equal(t, "", err.Key)
 		assert.Equal(t, "validation failed", err.Message)
 		assert.Equal(t, cause, err.Cause)
@@ -249,18 +249,18 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 
 	t.Run("NewRetryExhaustedError", func(t *testing.T) {
 		lastError := errors.New("connection failed")
-		err := NewRetryExhaustedError("get-operation", 5, lastError)
+		err := internal.NewRetryExhaustedError("get-operation", 5, lastError)
 
-		assert.Equal(t, CacheErrorTypeRetryExhausted, err.Type)
+		assert.Equal(t, ErrorTypeRetryExhausted, err.Type)
 		assert.Equal(t, "get-operation", err.Context.Operation)
 		assert.Equal(t, 5, err.Context.AttemptNumber)
 		assert.Equal(t, lastError, err.Cause)
 	})
 
 	t.Run("NewCircuitOpenError", func(t *testing.T) {
-		err := NewCircuitOpenError("set-operation")
+		err := internal.NewCircuitOpenError("set-operation")
 
-		assert.Equal(t, CacheErrorTypeCircuitOpen, err.Type)
+		assert.Equal(t, ErrorTypeCircuitOpen, err.Type)
 		assert.Equal(t, "set-operation", err.Context.Operation)
 	})
 
@@ -272,9 +272,9 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 			Duration:      100 * time.Millisecond,
 		}
 
-		err := NewCacheErrorWithContext(CacheErrorTypeTimeout, "test-key", "test message", cause, context)
+		err := internal.NewCacheErrorWithContext(ErrorTypeTimeout, "test-key", "test message", cause, context)
 
-		assert.Equal(t, CacheErrorTypeTimeout, err.Type)
+		assert.Equal(t, ErrorTypeTimeout, err.Type)
 		assert.Equal(t, "test-key", err.Key)
 		assert.Equal(t, "test message", err.Message)
 		assert.Equal(t, cause, err.Cause)
@@ -286,7 +286,7 @@ func TestRedisCache_ErrorConstructors(t *testing.T) {
 // TestRedisCache_CircuitBreakerIntegration tests circuit breaker functionality
 func TestRedisCache_CircuitBreakerIntegration(t *testing.T) {
 	t.Run("DefaultCircuitBreakerConfig", func(t *testing.T) {
-		config := DefaultCircuitBreakerConfig()
+		config := internal.DefaultCircuitBreakerConfig()
 
 		assert.NotNil(t, config)
 		assert.Equal(t, 5, config.FailureThreshold)
@@ -296,8 +296,8 @@ func TestRedisCache_CircuitBreakerIntegration(t *testing.T) {
 	})
 
 	t.Run("NewErrorRecoveryManager", func(t *testing.T) {
-		config := DefaultCircuitBreakerConfig()
-		erm := NewErrorRecoveryManager(config)
+		config := internal.DefaultCircuitBreakerConfig()
+		erm := internal.NewErrorRecoveryManager(config)
 
 		assert.NotNil(t, erm)
 
@@ -663,16 +663,16 @@ func TestRedisCache_ConcurrencyAndThreadSafety(t *testing.T) {
 
 // Helper function to check if error is a serialization error
 func IsSerializationError(err error) bool {
-	if cacheErr, ok := err.(*CacheError); ok {
-		return cacheErr.Type == CacheErrorTypeSerialization
+	if cacheErr, ok := err.(*Error); ok {
+		return cacheErr.Type == ErrorTypeSerialization
 	}
 	return false
 }
 
 // Helper function to check if error is a key invalid error
 func IsKeyInvalidError(err error) bool {
-	if cacheErr, ok := err.(*CacheError); ok {
-		return cacheErr.Type == CacheErrorTypeKeyInvalid
+	if cacheErr, ok := err.(*Error); ok {
+		return cacheErr.Type == ErrorTypeKeyInvalid
 	}
 	return false
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 		content     string
 		ttl         time.Duration
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -58,7 +59,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "@startuml\nstate A\n@enduml",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -70,7 +71,7 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			content:     "",
 			ttl:         time.Hour,
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -105,8 +106,8 @@ func TestRedisCache_StoreDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {
@@ -127,7 +128,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 		diagramType models.DiagramType
 		diagramName string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		expected    string
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
@@ -148,7 +149,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			diagramType: models.DiagramTypePUML,
 			diagramName: "non-existent-diagram",
 			expectError: true,
-			errorType:   CacheErrorTypeNotFound,
+			errorType:   ErrorTypeNotFound,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				mockKeyGen.On("DiagramKey", "non-existent-diagram").Return(fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String()))
 				mockKeyGen.On("ValidateKey", fmt.Sprintf("/diagrams/%s/non-existent-diagram", models.DiagramTypePUML.String())).Return(nil)
@@ -160,7 +161,7 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -182,8 +183,8 @@ func TestRedisCache_GetDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 				assert.Empty(t, content)
@@ -206,7 +207,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 		diagramType models.DiagramType
 		diagramName string
 		expectError bool
-		errorType   CacheErrorType
+		errorType   ErrorType
 		setupMocks  func(*MockRedisClient, *MockKeyGenerator)
 	}{
 		{
@@ -236,7 +237,7 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 			diagramType: models.DiagramTypePUML,
 			diagramName: "",
 			expectError: true,
-			errorType:   CacheErrorTypeValidation,
+			errorType:   ErrorTypeValidation,
 			setupMocks: func(mockClient *MockRedisClient, mockKeyGen *MockKeyGenerator) {
 				// No mocks needed for validation errors
 			},
@@ -258,8 +259,8 @@ func TestRedisCache_DeleteDiagram(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorType != 0 {
-					cacheErr, ok := err.(*CacheError)
-					require.True(t, ok, "expected CacheError, got %T", err)
+					cacheErr, ok := err.(*Error)
+					require.True(t, ok, "expected Error, got %T", err)
 					assert.Equal(t, tt.errorType, cacheErr.Type)
 				}
 			} else {
@@ -280,16 +281,16 @@ func TestRedisCache_KeyValidationError(t *testing.T) {
 
 	// Setup mock to return key validation error
 	mockKeyGen.On("DiagramKey", "test-diagram").Return("/invalid/key")
-	mockKeyGen.On("ValidateKey", "/invalid/key").Return(NewKeyInvalidError("/invalid/key", "invalid key format"))
+	mockKeyGen.On("ValidateKey", "/invalid/key").Return(internal.NewKeyInvalidError("/invalid/key", "invalid key format"))
 
 	cache := NewRedisCacheWithDependencies(mockClient, mockKeyGen, config)
 
 	err := cache.StoreDiagram(ctx, models.DiagramTypePUML, "test-diagram", "@startuml\nstate A\n@enduml", time.Hour)
 
 	require.Error(t, err)
-	cacheErr, ok := err.(*CacheError)
-	require.True(t, ok, "expected CacheError, got %T", err)
-	assert.Equal(t, CacheErrorTypeKeyInvalid, cacheErr.Type)
+	cacheErr, ok := err.(*Error)
+	require.True(t, ok, "expected Error, got %T", err)
+	assert.Equal(t, ErrorTypeKeyInvalid, cacheErr.Type)
 
 	mockKeyGen.AssertExpectations(t)
 }
