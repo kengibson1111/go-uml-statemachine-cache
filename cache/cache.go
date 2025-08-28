@@ -109,6 +109,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kengibson1111/go-uml-statemachine-cache/internal"
 	"github.com/kengibson1111/go-uml-statemachine-models/models"
 )
 
@@ -298,4 +299,17 @@ type Cache interface {
 	GetConnectionHealth(ctx context.Context) (*ConnectionHealth, error)
 	GetPerformanceMetrics(ctx context.Context) (*PerformanceMetrics, error)
 	RunDiagnostics(ctx context.Context) (*DiagnosticInfo, error)
+}
+
+// Re-export key types and functions for public API
+
+// KeyGenerator defines the interface for generating and validating cache keys
+type KeyGenerator = internal.KeyGenerator
+
+// DefaultKeyGenerator implements the KeyGenerator interface
+type DefaultKeyGenerator = internal.DefaultKeyGenerator
+
+// NewKeyGenerator creates a new DefaultKeyGenerator instance
+func NewKeyGenerator() KeyGenerator {
+	return internal.NewKeyGenerator()
 }
