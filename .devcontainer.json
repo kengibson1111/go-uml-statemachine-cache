@@ -1,0 +1,52 @@
+{
+	"image": "kengibson1111/godev",
+	"runArgs": [
+		"--rm",
+		"--network=kglabs-net"
+	],
+	"mounts": [
+		"source=${localEnv:USERPROFILE}/docker-user-home,target=/root,type=bind,consistency=cached",
+		"source=${localEnv:USERPROFILE}/myprojects,target=/var/local/myprojects,type=bind,consistency=cached",
+		"source=//var/run/docker.sock,target=//var/run/docker.sock,type=bind,consistency=cached"
+	],
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			"settings": {
+				"go.toolsManagement.checkForUpdates": "local",
+                "go.useLanguageServer": true,
+				"go.gopath": "/var/local/myprojects/golang",
+				"go.goroot": "/usr/bin/go",
+
+				"go.lintTool": "golangci-lint",
+                "go.lintOnSave": "package",
+                "[go]": {
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "always"
+                    }
+                },
+				"go.buildTags": "",
+
+				"gopls": {
+                    "usePlaceholders": false,
+                    "staticcheck": true
+                },
+                "vulncheck": "Imports",
+
+				"go.testTimeout": "30s",
+                "go.coverOnSingleTest": true,
+                "go.coverOnSingleTestFile": true,
+                "go.coverOnTestPackage": true,
+                "go.testFlags": [
+                    "-v",
+                    "-race"
+                ]
+			},
+			"extensions": [
+				"golang.Go",
+				"GitHub.copilot",
+				"golangci.golangci-lint"
+			]
+		}
+	}
+}
